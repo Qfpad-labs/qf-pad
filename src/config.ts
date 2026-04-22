@@ -3,7 +3,7 @@ import { maxUint256, type Address } from 'viem';
 export const QF_CHAIN_ID = 3426;
 export const QF_RPC_URL = "https://archive.mainnet.qfnode.net/eth";
 export const QF_WS_RPC_URL = "wss://mainnet.qfnode.net";
-export const QF_EXPLORER_URL = "https://portal.qfnetwork.xyz/?rpc=wss%3A%2F%2Fmainnet.qfnode.net#/explorer";
+export const QF_EXPLORER_URL = "https://explorer.qfnetwork.xyz";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
 
 export const SUPPORTED_CHAIN_IDS = [QF_CHAIN_ID] as number[];

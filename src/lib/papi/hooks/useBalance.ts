@@ -4,6 +4,13 @@ import { contractRead } from "@/lib/papi/contract-read";
 import { useWallet } from "@/lib/papi/wallet-context";
 import { erc20Abi, formatUnits, type Address } from "viem";
 
+interface BalanceQueryOptions {
+  enabled?: boolean;
+  refetchInterval?: number | false;
+  refetchOnWindowFocus?: boolean;
+  refetchOnReconnect?: boolean;
+}
+
 /**
  * Drop-in replacement for wagmi's useBalance.
  * Supports native QF balance and ERC20 token balance via `token` param.
@@ -11,10 +18,13 @@ import { erc20Abi, formatUnits, type Address } from "viem";
 export function useBalance({
   address: _evmAddress,
   token,
-}: { address?: string | Address; token?: Address; query?: Record<string, unknown> } = {}) {
+  query,
+}: { address?: string | Address; token?: Address; query?: BalanceQueryOptions } = {}) {
   const { ss58Address, address: evmAddress } = useWallet();
 
   const isErc20 = !!token;
+  const enabled =
+    query?.enabled !== false && (isErc20 ? !!evmAddress : !!ss58Address);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["balance", ss58Address, token ?? "native"],
@@ -64,9 +74,13 @@ export function useBalance({
         };
       }
     },
-    enabled: isErc20 ? !!evmAddress : !!ss58Address,
-    refetchInterval: 15000,
-    refetchOnWindowFocus: true,
+    enabled,
+    refetchInterval:
+      query?.refetchInterval === false
+        ? false
+        : query?.refetchInterval ?? 15000,
+    refetchOnWindowFocus: query?.refetchOnWindowFocus ?? true,
+    refetchOnReconnect: query?.refetchOnReconnect ?? true,
   });
 
   return {

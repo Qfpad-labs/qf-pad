@@ -87,7 +87,7 @@ export default function AirdropPage() {
     },
   });
 
-  const { data: tokenBalance } = useReadContract({
+  const { data: tokenBalance, refetch: refetchTokenBalance } = useReadContract({
     abi: erc20Abi,
     address: normalizedTokenAddress,
     functionName: "balanceOf",
@@ -98,7 +98,7 @@ export default function AirdropPage() {
   });
 
   // Native QF balance
-  const { data: reactBalance } = useBalance({
+  const { data: reactBalance, refetch: refetchReactBalance } = useBalance({
     address: address,
     query: {
       enabled: !!address && sendType === "react",
@@ -269,20 +269,43 @@ export default function AirdropPage() {
   }, [isSendConfirming]);
 
   useEffect(() => {
-    if (isApproveConfirmed) {
+    if (isApproveConfirmed && approveHash) {
       toast.success("Approval successful! You can now send your tokens.");
-      refetchAllowance();
+      void Promise.allSettled([
+        refetchAllowance(),
+        sendType === "erc20" ? refetchTokenBalance() : Promise.resolve(),
+      ]);
       resetApprove();
     }
-  }, [isApproveConfirmed, refetchAllowance, resetApprove]);
+  }, [
+    approveHash,
+    isApproveConfirmed,
+    refetchAllowance,
+    refetchTokenBalance,
+    resetApprove,
+    sendType,
+  ]);
 
   useEffect(() => {
     if (isSendConfirmed && sendHash) {
       toast.success("Airdrop sent successfully!");
       setRecipientsData("");
+      void Promise.allSettled(
+        sendType === "erc20"
+          ? [refetchAllowance(), refetchTokenBalance()]
+          : [refetchReactBalance()]
+      );
       resetSend();
     }
-  }, [isSendConfirmed, sendHash, resetSend]);
+  }, [
+    isSendConfirmed,
+    refetchAllowance,
+    refetchReactBalance,
+    refetchTokenBalance,
+    resetSend,
+    sendHash,
+    sendType,
+  ]);
 
   useEffect(() => {
     if (approveError) {
