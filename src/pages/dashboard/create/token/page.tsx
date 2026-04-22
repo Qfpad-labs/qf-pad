@@ -166,7 +166,10 @@ export default function CreateTokenPage() {
             <Coins className="w-8 h-8" /> Create Token
           </h1>
           <p className="text-sm text-gray-700 mt-2">
-            Deploy your own ERC-20 token on the blockchain.
+            Deploy a token with fixed supply, minting, burning, or transfer-tax options.
+          </p>
+          <p className="text-xs text-gray-600 mt-1">
+            Advanced: ERC-20 compatible token contract.
           </p>
         </div>
       </div>
@@ -238,7 +241,7 @@ export default function CreateTokenPage() {
                 </SelectContent>
               </Select>
               <p className="text-xs text-gray-500">
-                {tokenType === TokenType.Plain && "A standard ERC-20 token with basic transfer functionality."}
+                {tokenType === TokenType.Plain && "A standard token with basic transfer functionality."}
                 {tokenType === TokenType.Mintable && "Allows the owner to mint new tokens after deployment."}
                 {tokenType === TokenType.Burnable && "Allows holders to burn (destroy) their tokens."}
                 {tokenType === TokenType.Taxable && "Applies a tax on transfers, sent to a designated wallet."}

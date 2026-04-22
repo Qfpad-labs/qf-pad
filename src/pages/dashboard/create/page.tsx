@@ -8,7 +8,7 @@ const getCreationOptions = (isWhitelisted: boolean | undefined) => [
   {
     to: "/dashboard/create/token",
     title: "Create a new Token",
-    description: "Deploy a standard, mintable, or taxable ERC20 token.",
+    description: "Deploy a token with fixed supply, minting, burning, or transfer-tax options.",
     icon: CircleDollarSign,
   },
   ...(isWhitelisted
