@@ -1,4 +1,3 @@
-import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { contractWrite } from "@/lib/papi/contract-write";
 import { useWallet } from "@/lib/papi/wallet-context";
@@ -68,19 +67,6 @@ function extractContractLogs(
   });
 }
 
-function schedulePostTransactionRefresh(
-  queryClient: ReturnType<typeof useQueryClient>
-) {
-  const refreshActiveQueries = () => {
-    void queryClient.invalidateQueries();
-    void queryClient.refetchQueries({ type: "active" });
-  };
-
-  refreshActiveQueries();
-  globalThis.setTimeout(refreshActiveQueries, 1200);
-  globalThis.setTimeout(refreshActiveQueries, 3500);
-}
-
 /**
  * Drop-in replacement for wagmi's useWriteContract.
  *
@@ -90,7 +76,6 @@ function schedulePostTransactionRefresh(
  */
 export function useWriteContract() {
   const { account } = useWallet();
-  const queryClient = useQueryClient();
 
   const [hash, setHash] = useState<string | undefined>();
   const [isPending, setIsPending] = useState(false);
@@ -137,10 +122,6 @@ export function useWriteContract() {
           logs: extractContractLogs(result.events),
         });
 
-        if (result.ok) {
-          schedulePostTransactionRefresh(queryClient);
-        }
-
         return result.txHash;
       } catch (err) {
         const error =
@@ -157,7 +138,7 @@ export function useWriteContract() {
         throw error;
       }
     },
-    [account, queryClient]
+    [account]
   );
 
   const writeContract = useCallback(
