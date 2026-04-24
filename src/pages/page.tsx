@@ -296,7 +296,7 @@ export default function Home() {
               <TelegramIcon size={18} />
             </a>
             <a
-              href="https://explorer.qfnetwork.xyz"
+              href="https://qfpad.gitbook.io/docs"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex h-10 w-10 items-center justify-center border-[2px] border-black bg-[#B8EF53] text-black transition-all hover:-translate-y-1"
