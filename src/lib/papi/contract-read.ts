@@ -37,7 +37,7 @@ export async function contractRead({
   // For reads, origin can be a dummy SS58 address if not provided.
   // ReviveApi.call takes origin as SS58String.
   const origin =
-    callerAddress ?? "5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM"; // Alice dev address as fallback
+    callerAddress ?? "5GsUbAaQ5ZKL7TFScGbekje6cfdi8KZhPqoNX3fRQznr9h3g"; // QF mainnet read fallback
 
   const result = await typedApi.apis.ReviveApi.call(
     origin,

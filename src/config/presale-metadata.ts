@@ -6,6 +6,10 @@ export interface PresaleMetadata {
   socials?: PresaleSocials;
   description?: string;
   logo?: string;
+  cardDetails?: Array<{ label: string; value: string }>;
+  cardCtaLabel?: string;
+  cardCtaDisabled?: boolean;
+  disableProjectLink?: boolean;
 }
 
 // Map presale contract addresses to their metadata (socials, category, etc.)
@@ -40,6 +44,27 @@ export const presaleMetadataMap: Record<string, PresaleMetadata> = {
       website: "https://portal.qfnetwork.xyz/?rpc=wss%3A%2F%2Fmainnet.qfnode.net#/explorer",
       discord: "",
     },
+  },
+  "0xa1f13f120ca2f7a5d84e524406fa4ee9bbd26e93": {
+    category: "infrastructure",
+    description: "Participate in the QPAD launch with USDC on Ethereum, then claim QPAD on QF Network.",
+    logo: "/qfpad-logo.png",
+    socials: {
+      twitter: "https://x.com/qfpad_",
+      telegram: "https://t.me/qfpad",
+      website: "",
+      discord: "",
+    },
+    cardDetails: [
+      { label: "Sale", value: "9,000,000 QPAD" },
+      { label: "Soft Cap", value: "$30,000" },
+      { label: "Min", value: "$50" },
+      { label: "Max", value: "$1,600" },
+      { label: "Rate", value: "1 USDC = 225 QPAD" },
+    ],
+    cardCtaLabel: "Contribute",
+    cardCtaDisabled: true,
+    disableProjectLink: true,
   },
 };
 

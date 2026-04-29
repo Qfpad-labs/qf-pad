@@ -2,7 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { Project } from "@/components/ui/project-card";
 import { Link } from "react-router-dom";
 import { useEffect, useState, useMemo } from "react";
-import { formatEther } from "viem";
+import { formatUnits } from "viem";
 import type { PresaleWithStatus } from "@/lib/hooks/useLaunchpadPresales";
 import type { PresaleCategory } from "@/lib/store/launchpad-presale-store";
 import { Twitter, Send, Globe, MessageCircle } from "lucide-react";
@@ -12,7 +12,7 @@ function CountdownTimer({ targetDate, isStart = false }: { targetDate: Date; isS
     const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
     useEffect(() => {
-        const timer = setInterval(() => {
+        const updateTimeLeft = () => {
             const now = new Date().getTime();
             const distance = targetDate.getTime() - now;
 
@@ -23,9 +23,13 @@ function CountdownTimer({ targetDate, isStart = false }: { targetDate: Date; isS
                     minutes: Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60)),
                     seconds: Math.floor((distance % (1000 * 60)) / 1000)
                 });
+            } else {
+                setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
             }
-        }, 1000);
+        };
 
+        updateTimeLeft();
+        const timer = setInterval(updateTimeLeft, 1000);
         return () => clearInterval(timer);
     }, [targetDate]);
 
@@ -87,10 +91,14 @@ export function PresaleCard({ presale }: { presale: PresaleWithStatus }) {
     const category = presale.category || metadata?.category;
     const customDescription = presale.description || metadata?.description;
     const customLogo = presale.logo || metadata?.logo;
+    const cardDetails = metadata?.cardDetails;
+    const ctaLabel = metadata?.cardCtaLabel;
+    const ctaDisabled = metadata?.cardCtaDisabled ?? false;
+    const disableProjectLink = metadata?.disableProjectLink ?? false;
 
-    // Convert wei values to ether
-    const raised = parseFloat(formatEther(presale.totalRaised || 0n));
-    const goal = parseFloat(formatEther(presale.hardCap || 0n));
+    const paymentTokenDecimals = presale.paymentTokenDecimals || 18;
+    const raised = parseFloat(formatUnits(presale.totalRaised || 0n, paymentTokenDecimals));
+    const goal = parseFloat(formatUnits(presale.hardCap || 0n, paymentTokenDecimals));
     const progressValue = presale.progress || 0;
 
     // Parse dates from bigint timestamps
@@ -138,9 +146,20 @@ export function PresaleCard({ presale }: { presale: PresaleWithStatus }) {
 
     const categoryStyle = getCategoryStyle(category);
 
-    return (
-        <Link to={`/projects/${presale.address}`}>
-            <div className="relative h-full cursor-pointer flex flex-col border-[3px] border-black bg-white p-6 [box-shadow:0_0_0_1px_#000,10px_10px_0_0_#000] transition-all duration-200 group hover:[box-shadow:0_0_0_1px_#000,14px_14px_0_0_#000] hover:-translate-x-1 hover:-translate-y-1">
+    const getCtaClassName = (status: "live" | "upcoming") => {
+        const enabledClass =
+            status === "live"
+                ? "bg-[#42C9FF] hover:[box-shadow:0_0_0_1px_#000,12px_12px_0_0_#000] hover:-translate-x-1 hover:-translate-y-1"
+                : "bg-[#FF7F41] hover:[box-shadow:0_0_0_1px_#000,12px_12px_0_0_#000] hover:-translate-x-1 hover:-translate-y-1";
+
+        return `${status === "live" ? "-rotate-[0.3deg]" : "rotate-[0.3deg]"} w-full mt-4 text-black h-12 font-black uppercase text-xs tracking-[0.14em] border-[3px] border-black [box-shadow:0_0_0_1px_#000,8px_8px_0_0_#000] transition-all ${ctaDisabled
+            ? "cursor-not-allowed bg-gray-300 text-black/55 opacity-80"
+            : enabledClass
+            }`;
+    };
+
+    const card = (
+            <div className={`relative h-full ${disableProjectLink ? "cursor-default" : "cursor-pointer"} flex flex-col border-[3px] border-black bg-white p-6 [box-shadow:0_0_0_1px_#000,10px_10px_0_0_#000] transition-all duration-200 group hover:[box-shadow:0_0_0_1px_#000,14px_14px_0_0_#000] hover:-translate-x-1 hover:-translate-y-1`}>
                 {/* Status indicator */}
                 <div className={`absolute top-0 right-0 w-5 h-5 translate-x-1 -translate-y-1 rotate-[8deg] border-[3px] border-black ${getStatusColor()}`}></div>
 
@@ -221,6 +240,18 @@ export function PresaleCard({ presale }: { presale: PresaleWithStatus }) {
 
                 <p className="font-bold mb-6 min-h-[3rem] text-black/85">{description}</p>
 
+                {cardDetails && cardDetails.length > 0 && (
+                    <div className="mb-6 border-[3px] border-black bg-[#FFF2D5] px-4 py-3">
+                        <p className="mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-black/60">Sale Details</p>
+                        {cardDetails.map((detail) => (
+                            <div key={`${detail.label}-${detail.value}`} className="flex items-start justify-between gap-4 border-t-2 border-black/20 py-2 first:border-t-0 first:pt-0 last:pb-0">
+                                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-black/60">{detail.label}</p>
+                                <p className="text-right text-xs font-black uppercase leading-tight">{detail.value}</p>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
                 <div className="mb-6">
                     <div className="flex justify-between items-center mb-2">
                         <span className="text-xs font-black uppercase tracking-wider">PROGRESS</span>
@@ -243,8 +274,8 @@ export function PresaleCard({ presale }: { presale: PresaleWithStatus }) {
                     {project.statusType === 'live' && project.endTime && (
                         <div className="pt-6 border-t-[3px] border-black">
                             <CountdownTimer targetDate={project.endTime} />
-                            <button className="-rotate-[0.3deg] w-full mt-4 bg-[#42C9FF] text-black h-12 font-black uppercase text-xs tracking-[0.14em] border-[3px] border-black [box-shadow:0_0_0_1px_#000,8px_8px_0_0_#000] hover:[box-shadow:0_0_0_1px_#000,12px_12px_0_0_#000] hover:-translate-x-1 hover:-translate-y-1 transition-all">
-                                PARTICIPATE
+                            <button className={getCtaClassName("live")} disabled={ctaDisabled} type="button">
+                                {ctaLabel ?? "PARTICIPATE"}
                             </button>
                         </div>
                     )}
@@ -252,8 +283,8 @@ export function PresaleCard({ presale }: { presale: PresaleWithStatus }) {
                     {project.statusType === 'upcoming' && project.startTime && (
                         <div className="pt-6 border-t-[3px] border-black">
                             <CountdownTimer targetDate={project.startTime} isStart={true} />
-                            <button className="rotate-[0.3deg] w-full mt-4 bg-[#FF7F41] text-black h-12 font-black uppercase text-xs tracking-[0.14em] border-[3px] border-black [box-shadow:0_0_0_1px_#000,8px_8px_0_0_#000] hover:[box-shadow:0_0_0_1px_#000,12px_12px_0_0_#000] hover:-translate-x-1 hover:-translate-y-1 transition-all">
-                                NOTIFY ME
+                            <button className={getCtaClassName("upcoming")} disabled={ctaDisabled} type="button">
+                                {ctaLabel ?? "NOTIFY ME"}
                             </button>
                         </div>
                     )}
@@ -266,6 +297,15 @@ export function PresaleCard({ presale }: { presale: PresaleWithStatus }) {
                     )}
                 </div>
             </div>
+    );
+
+    if (disableProjectLink) {
+        return card;
+    }
+
+    return (
+        <Link to={`/projects/${presale.address}`}>
+            {card}
         </Link>
     );
 }

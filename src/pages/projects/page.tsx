@@ -2,10 +2,11 @@
 
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PresaleCard } from "@/components/ui/presale-card";
 import { useLaunchpadPresales } from "@/lib/hooks/useLaunchpadPresales";
 import type { LaunchpadPresaleFilter } from "@/lib/hooks/useLaunchpadPresales";
+import { getQpadStaticPresale, QPAD_TOKEN_ADDRESS } from "@/config/static-presales";
 
 const filterOptions: Array<{ label: string; value: LaunchpadPresaleFilter; color: string }> = [
   { label: "All", value: "all", color: "bg-[#42C9FF]" },
@@ -14,17 +15,50 @@ const filterOptions: Array<{ label: string; value: LaunchpadPresaleFilter; color
   { label: "Ended", value: "ended", color: "bg-white" },
 ];
 
+const hiddenProjectTerms = ["brazenbull"];
+const hiddenProjectAddresses = new Set([
+  "0xf9db3b6bb2bee97aa2dca5b25e28ae9887fff908",
+]);
+
+function isHiddenProject(presale: { address: string; saleTokenName?: string; saleTokenSymbol?: string }) {
+  if (hiddenProjectAddresses.has(presale.address.toLowerCase())) return true;
+
+  const searchable = `${presale.saleTokenName ?? ""} ${presale.saleTokenSymbol ?? ""}`.toLowerCase();
+  return hiddenProjectTerms.some((term) => searchable.includes(term));
+}
+
 export default function ProjectsPage() {
   const [activeFilter, setActiveFilter] = useState<LaunchpadPresaleFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const { presales, isLoading } = useLaunchpadPresales(activeFilter);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const { presales, isLoading } = useLaunchpadPresales("all");
 
-  const filteredPresales = presales.filter((presale) => {
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const qpadPresale = useMemo(() => getQpadStaticPresale(nowMs), [nowMs]);
+  const allPresales = useMemo(() => {
+    const qpadAddress = QPAD_TOKEN_ADDRESS.toLowerCase();
+    return [
+      qpadPresale,
+      ...presales.filter((presale) => presale.address.toLowerCase() !== qpadAddress && !isHiddenProject(presale)),
+    ];
+  }, [presales, qpadPresale]);
+
+  const filteredPresales = allPresales.filter((presale) => {
     if (!presale) return false;
+    const matchesFilter =
+      activeFilter === "all" ||
+      (activeFilter === "ended"
+        ? presale.status === "ended" || presale.claimEnabled || presale.refundsEnabled
+        : presale.status === activeFilter);
     const matchesSearch =
       presale.saleTokenName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      presale.saleTokenSymbol?.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
+      presale.saleTokenSymbol?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      presale.address.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesFilter && matchesSearch;
   });
 
   return (
@@ -72,7 +106,7 @@ export default function ProjectsPage() {
           </div>
         </section>
 
-        {isLoading ? (
+        {isLoading && filteredPresales.length === 0 ? (
           <div className="neo-frame bg-white p-10 text-center text-lg font-black uppercase tracking-[0.14em] animate-fade-in-up">
             Loading projects...
           </div>
