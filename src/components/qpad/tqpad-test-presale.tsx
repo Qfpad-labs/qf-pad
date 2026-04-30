@@ -14,7 +14,7 @@ import {
   type Abi,
   type Hex,
 } from "viem";
-import { sepolia } from "viem/chains";
+import { mainnet } from "viem/chains";
 import { toast } from "sonner";
 import { useConnectModal as useEvmConnectModal } from "@rainbow-me/rainbowkit";
 import {
@@ -45,16 +45,17 @@ import {
   type QpadPurchaseStatusResponse,
 } from "@/lib/qpad/purchase-status";
 
-const SEPOLIA_RPC_URL = "https://ethereum-sepolia-rpc.publicnode.com";
-const SEPOLIA_EXPLORER_URL = "https://sepolia.etherscan.io";
+const ETH_MAINNET_RPC_URL =
+  import.meta.env.VITE_ETH_MAINNET_RPC_URL || "https://eth-mainnet.g.alchemy.com/v2/GRqk_Y0D98nc4YsmnLM1p-PhLjupA2pT";
+const ETHERSCAN_URL = "https://etherscan.io";
 const USDC_DECIMALS = 6;
 const QPAD_DECIMALS = 18;
 const USDC_UNIT = 1_000_000n;
 const CONFIRMATIONS_REQUIRED = 6;
 
-const sepoliaClient = createPublicClient({
-  chain: sepolia,
-  transport: http(SEPOLIA_RPC_URL),
+const ethereumClient = createPublicClient({
+  chain: mainnet,
+  transport: http(ETH_MAINNET_RPC_URL),
 });
 
 const qpadPresaleAbi = parseAbi([
@@ -178,7 +179,7 @@ function getInputError(amountRaw: bigint, sale: SaleState) {
   if (amountRaw > 1_600n * USDC_UNIT) return "Maximum is 1,600 USDC.";
   if (sale.buyerUsdc + amountRaw > 1_600n * USDC_UNIT) return "This exceeds the wallet max.";
   if (amountRaw > sale.remainingUsdcCap) return "This exceeds the remaining cap.";
-  if (amountRaw > sale.usdcBalance) return "Insufficient Sepolia USDC.";
+  if (amountRaw > sale.usdcBalance) return "Insufficient USDC.";
   return null;
 }
 
@@ -197,7 +198,7 @@ function formatStatusQpadAmount(amount: string | undefined) {
   return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
-export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
+export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) {
   const { address: qfMappedRecipient, ss58Address } = useQfAccount();
   const { openConnectModal: openQfConnectModal } = useQfConnectModal();
   const { writeContractAsync, isPending: isClaimPending, error: claimError } = useQfWriteContract();
@@ -253,16 +254,16 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
   const claimsEnabled = qfMappedRecipient ? ((qfReadResults?.[0]?.result as boolean | undefined) ?? false) : false;
   const claimableNow = qfMappedRecipient ? ((qfReadResults?.[1]?.result as bigint | undefined) ?? 0n) : 0n;
   const claimedByRecipient = qfMappedRecipient ? ((qfReadResults?.[2]?.result as bigint | undefined) ?? 0n) : 0n;
-  const recipientTqpadBalance = qfMappedRecipient ? ((qfReadResults?.[3]?.result as bigint | undefined) ?? 0n) : 0n;
+  const recipientQpadBalance = qfMappedRecipient ? ((qfReadResults?.[3]?.result as bigint | undefined) ?? 0n) : 0n;
 
   const refreshSaleState = useCallback(async (account?: Address) => {
     setIsRefreshing(true);
     try {
       const [isSaleOpen, totalRaised, totalQpadSold, remainingUsdcCap] = await Promise.all([
-        sepoliaClient.readContract({ address: sale.presaleAddress, abi: qpadPresaleAbi, functionName: "isSaleOpen" }),
-        sepoliaClient.readContract({ address: sale.presaleAddress, abi: qpadPresaleAbi, functionName: "totalRaised" }),
-        sepoliaClient.readContract({ address: sale.presaleAddress, abi: qpadPresaleAbi, functionName: "totalQpadSold" }),
-        sepoliaClient.readContract({ address: sale.presaleAddress, abi: qpadPresaleAbi, functionName: "remainingUsdcCap" }),
+        ethereumClient.readContract({ address: sale.presaleAddress, abi: qpadPresaleAbi, functionName: "isSaleOpen" }),
+        ethereumClient.readContract({ address: sale.presaleAddress, abi: qpadPresaleAbi, functionName: "totalRaised" }),
+        ethereumClient.readContract({ address: sale.presaleAddress, abi: qpadPresaleAbi, functionName: "totalQpadSold" }),
+        ethereumClient.readContract({ address: sale.presaleAddress, abi: qpadPresaleAbi, functionName: "remainingUsdcCap" }),
       ]);
 
       let buyerUsdc = 0n;
@@ -272,10 +273,10 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
 
       if (account) {
         [buyerUsdc, buyerQpad, usdcBalance, usdcAllowance] = await Promise.all([
-          sepoliaClient.readContract({ address: sale.presaleAddress, abi: qpadPresaleAbi, functionName: "purchasedUsdc", args: [account] }),
-          sepoliaClient.readContract({ address: sale.presaleAddress, abi: qpadPresaleAbi, functionName: "purchasedQpad", args: [account] }),
-          sepoliaClient.readContract({ address: sale.usdcAddress, abi: erc20Abi, functionName: "balanceOf", args: [account] }),
-          sepoliaClient.readContract({ address: sale.usdcAddress, abi: erc20Abi, functionName: "allowance", args: [account, sale.presaleAddress] }),
+          ethereumClient.readContract({ address: sale.presaleAddress, abi: qpadPresaleAbi, functionName: "purchasedUsdc", args: [account] }),
+          ethereumClient.readContract({ address: sale.presaleAddress, abi: qpadPresaleAbi, functionName: "purchasedQpad", args: [account] }),
+          ethereumClient.readContract({ address: sale.usdcAddress, abi: erc20Abi, functionName: "balanceOf", args: [account] }),
+          ethereumClient.readContract({ address: sale.usdcAddress, abi: erc20Abi, functionName: "allowance", args: [account, sale.presaleAddress] }),
         ]);
       }
 
@@ -290,8 +291,8 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
         usdcAllowance,
       });
     } catch (error) {
-      console.error("Failed to refresh TQPAD sale state", error);
-      toast.error("Unable to refresh TQPAD sale data.");
+      console.error("Failed to refresh QPAD sale state", error);
+      toast.error("Unable to refresh QPAD sale data.");
     } finally {
       setIsRefreshing(false);
     }
@@ -307,12 +308,12 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
   }, []);
 
   const refreshPurchaseTracking = useCallback(async (txHash: Hex) => {
-    const currentBlock = await sepoliaClient.getBlockNumber();
+    const currentBlock = await ethereumClient.getBlockNumber();
 
     try {
-      let receipt: Awaited<ReturnType<typeof sepoliaClient.getTransactionReceipt>>;
+      let receipt: Awaited<ReturnType<typeof ethereumClient.getTransactionReceipt>>;
       try {
-        receipt = await sepoliaClient.getTransactionReceipt({ hash: txHash });
+        receipt = await ethereumClient.getTransactionReceipt({ hash: txHash });
       } catch (receiptError) {
         const message = receiptError instanceof Error ? receiptError.message : String(receiptError);
         if (message.toLowerCase().includes("not found")) {
@@ -339,7 +340,7 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
               ...previous,
               stage: "failed",
               confirmations,
-              error: "Sepolia transaction reverted.",
+              error: "Ethereum transaction reverted.",
             }
           : previous);
         return;
@@ -360,7 +361,7 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
 
       const status = await fetchQpadPurchaseStatus({
         txHash,
-        chainId: sepolia.id,
+        chainId: mainnet.id,
         presaleAddress: sale.presaleAddress,
       });
       const stage = getTrackerStage(status.status, status.found);
@@ -385,7 +386,7 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
 
       if (shouldToastRegistered) {
         const qpadAmount = formatStatusQpadAmount(status.qpadAmount);
-        toast.success(qpadAmount ? `QF allocation registered: ${qpadAmount} TQPAD` : "QF allocation registered.");
+        toast.success(qpadAmount ? `QF allocation registered: ${qpadAmount} ${sale.symbol}` : "QF allocation registered.");
         await refetchQfState();
         await refreshSaleState(ethAccount);
       }
@@ -399,7 +400,7 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
           }
         : previous);
     }
-  }, [ethAccount, refetchQfState, refreshSaleState, sale.presaleAddress, trackedPurchase?.stage, trackedPurchase?.txHash]);
+  }, [ethAccount, refetchQfState, refreshSaleState, sale.presaleAddress, sale.symbol, trackedPurchase?.stage, trackedPurchase?.txHash]);
 
   useEffect(() => {
     if (!trackedPurchase || trackedPurchase.stage === "registered" || trackedPurchase.stage === "failed") return;
@@ -428,26 +429,26 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
     openEvmConnectModal();
   }, [openEvmConnectModal]);
 
-  const switchToSepolia = useCallback(async () => {
+  const switchToEthereum = useCallback(async () => {
     if (!isEvmConnected) {
       connectEthereumWallet();
       return;
     }
     try {
-      await switchChainAsync({ chainId: sepolia.id });
+      await switchChainAsync({ chainId: mainnet.id });
     } catch (error) {
-      console.error("Sepolia switch failed", error);
+      console.error("Ethereum switch failed", error);
       toast.error(getFriendlyTxErrorMessage(error, "Network switch"));
     }
   }, [connectEthereumWallet, isEvmConnected, switchChainAsync]);
 
-  const ensureSepolia = useCallback(async () => {
+  const ensureEthereum = useCallback(async () => {
     if (!isEvmConnected || !ethAccount) {
       connectEthereumWallet();
       throw new Error("Connect an Ethereum wallet first");
     }
-    if (ethChainId !== sepolia.id) {
-      await switchChainAsync({ chainId: sepolia.id });
+    if (ethChainId !== mainnet.id) {
+      await switchChainAsync({ chainId: mainnet.id });
     }
   }, [connectEthereumWallet, ethAccount, ethChainId, isEvmConnected, switchChainAsync]);
 
@@ -456,7 +457,7 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
   const canSubmit =
     saleState.isSaleOpen &&
     !!ethAccount &&
-    ethChainId === sepolia.id &&
+    ethChainId === mainnet.id &&
     !!qfMappedRecipient &&
     !!qfAccountId32 &&
     amountRaw > 0n &&
@@ -469,15 +470,15 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
     if (!ethAccount || amountRaw === 0n) return;
     setIsApproving(true);
     try {
-      await ensureSepolia();
+      await ensureEthereum();
       const hash = await writeEvmContractAsync({
-        chainId: sepolia.id,
+        chainId: mainnet.id,
         address: sale.usdcAddress,
         abi: erc20Abi,
         functionName: "approve",
         args: [sale.presaleAddress, amountRaw],
       });
-      await sepoliaClient.waitForTransactionReceipt({ hash });
+      await ethereumClient.waitForTransactionReceipt({ hash });
       toast.success("USDC approved.");
       await refreshSaleState(ethAccount);
     } catch (error) {
@@ -486,16 +487,16 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
     } finally {
       setIsApproving(false);
     }
-  }, [amountRaw, ensureSepolia, ethAccount, refreshSaleState, sale.presaleAddress, sale.usdcAddress, writeEvmContractAsync]);
+  }, [amountRaw, ensureEthereum, ethAccount, refreshSaleState, sale.presaleAddress, sale.usdcAddress, writeEvmContractAsync]);
 
-  const buyTqpad = useCallback(async () => {
+  const buyQpad = useCallback(async () => {
     if (!ethAccount || !qfMappedRecipient || !qfAccountId32 || amountRaw === 0n) return;
     setIsBuying(true);
     try {
-      await ensureSepolia();
+      await ensureEthereum();
       const nonce = BigInt(Date.now());
       const hash = await writeEvmContractAsync({
-        chainId: sepolia.id,
+        chainId: mainnet.id,
         address: sale.presaleAddress,
         abi: qpadPresaleAbi,
         functionName: "buy",
@@ -508,20 +509,20 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
         confirmations: 0,
         confirmationsRequired: CONFIRMATIONS_REQUIRED,
       });
-      await sepoliaClient.waitForTransactionReceipt({ hash });
-      toast.success("TQPAD purchase confirmed on Sepolia. Waiting for QF allocation.");
+      await ethereumClient.waitForTransactionReceipt({ hash });
+      toast.success("QPAD purchase confirmed on Ethereum. Waiting for QF allocation.");
       setAmount("");
       await refreshSaleState(ethAccount);
       await refetchQfState();
     } catch (error) {
-      console.error("TQPAD purchase failed", error);
+      console.error("QPAD purchase failed", error);
       toast.error(getFriendlyTxErrorMessage(error, "Contribution"));
     } finally {
       setIsBuying(false);
     }
-  }, [amountRaw, ensureSepolia, ethAccount, qfAccountId32, qfMappedRecipient, refreshSaleState, refetchQfState, sale.presaleAddress, writeEvmContractAsync]);
+  }, [amountRaw, ensureEthereum, ethAccount, qfAccountId32, qfMappedRecipient, refreshSaleState, refetchQfState, sale.presaleAddress, writeEvmContractAsync]);
 
-  const claimTqpad = useCallback(async () => {
+  const claimQpad = useCallback(async () => {
     const claimedAmount = claimableNow;
     try {
       await writeContractAsync({
@@ -529,18 +530,18 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
         abi: qpadClaimVaultAbi,
         functionName: "claim",
       });
-      toast.success(`Claimed: ${formatAmount(claimedAmount, QPAD_DECIMALS)} TQPAD`);
+      toast.success(`Claimed: ${formatAmount(claimedAmount, QPAD_DECIMALS)} ${sale.symbol}`);
       await refetchQfState();
     } catch (error) {
-      console.error("TQPAD claim failed", error);
+      console.error("QPAD claim failed", error);
       toast.error(getFriendlyTxErrorMessage(error, "Claim"));
     }
-  }, [claimableNow, refetchQfState, sale.claimVaultAddress, writeContractAsync]);
+  }, [claimableNow, refetchQfState, sale.claimVaultAddress, sale.symbol, writeContractAsync]);
 
   const ethCta = !isEvmConnected
     ? "Connect Ethereum Wallet"
-    : ethChainId !== sepolia.id
-      ? "Switch to Sepolia"
+    : ethChainId !== mainnet.id
+      ? "Switch to Ethereum"
       : needsApproval
         ? "Approve USDC"
         : "Contribute";
@@ -554,7 +555,7 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
             <AvatarFallback className="font-black">{sale.symbol.slice(0, 2)}</AvatarFallback>
           </Avatar>
           <div>
-            <Badge className="mb-3 hidden bg-[#B8EF53] sm:inline-flex">Sepolia Test Sale</Badge>
+            <Badge className="mb-3 hidden bg-[#B8EF53] sm:inline-flex">Ethereum Mainnet Sale</Badge>
             <h1 className="text-3xl font-black uppercase tracking-tight sm:text-4xl">
               {sale.name} ({sale.symbol})
             </h1>
@@ -591,7 +592,7 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
               </div>
               <Progress value={progress} className="h-4 border-[3px] border-black" />
               <div className="mt-5 grid gap-4 text-sm font-bold sm:grid-cols-3">
-                <Metric label="Sold" value={`${formatAmount(saleState.totalQpadSold, QPAD_DECIMALS)} TQPAD`} />
+                <Metric label="Sold" value={`${formatAmount(saleState.totalQpadSold, QPAD_DECIMALS)} ${sale.symbol}`} />
                 <Metric label="Soft Cap" value={sale.softCapLabel} />
                 <Metric label="Hard Cap" value={sale.hardCapLabel} />
               </div>
@@ -622,25 +623,25 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
                 }`}
               >
                 {claimsEnabled
-                  ? "Claims are open — claim your TQPAD below."
-                  : "Claims are not yet enabled — check back once the sale closes."}
+                  ? `Claims are open - claim your ${sale.symbol} below.`
+                  : "Claims are not yet enabled - check back once the sale closes."}
               </div>
               <div className="divide-y-2 divide-black/10">
-                <DetailRow label="Your Claimable" value={`${formatAmount(claimableNow, QPAD_DECIMALS)} TQPAD`} />
-                <DetailRow label="Already Claimed" value={`${formatAmount(claimedByRecipient, QPAD_DECIMALS)} TQPAD`} />
-                <DetailRow label="TQPAD Balance" value={`${formatAmount(recipientTqpadBalance, QPAD_DECIMALS)} TQPAD`} />
+                <DetailRow label="Your Claimable" value={`${formatAmount(claimableNow, QPAD_DECIMALS)} ${sale.symbol}`} />
+                <DetailRow label="Already Claimed" value={`${formatAmount(claimedByRecipient, QPAD_DECIMALS)} ${sale.symbol}`} />
+                <DetailRow label={`${sale.symbol} Balance`} value={`${formatAmount(recipientQpadBalance, QPAD_DECIMALS)} ${sale.symbol}`} />
               </div>
               <Button
                 type="button"
                 className="w-full"
-                onClick={claimTqpad}
+                onClick={claimQpad}
                 disabled={!qfMappedRecipient || !claimsEnabled || claimableNow === 0n || isClaimPending}
               >
-                {isClaimPending ? "Claiming..." : claimsEnabled ? "Claim TQPAD" : "Claims Not Enabled"}
+                {isClaimPending ? "Claiming..." : claimsEnabled ? `Claim ${sale.symbol}` : "Claims Not Enabled"}
               </Button>
               {claimedByRecipient > 0n && (
                 <p className="text-sm font-bold text-black/70">
-                  Claimed: {formatAmount(claimedByRecipient, QPAD_DECIMALS)} TQPAD
+                  Claimed: {formatAmount(claimedByRecipient, QPAD_DECIMALS)} {sale.symbol}
                 </p>
               )}
               {claimError && <p className="text-sm font-bold text-[#B42318]">{getFriendlyTxErrorMessage(claimError, "Claim")}</p>}
@@ -674,7 +675,7 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
                   <div className="space-y-3">
                     <div className="space-y-1 text-sm font-bold text-black/70">
                       <p>{shortAddress(ethAccount)}</p>
-                      <p>{ethChainId === sepolia.id ? "Sepolia" : "Wrong network"}</p>
+                      <p>{ethChainId === mainnet.id ? "Ethereum" : "Wrong network"}</p>
                     </div>
                     <Button type="button" variant="outline" className="w-full" onClick={() => disconnectEvmWallet()}>
                       Disconnect Ethereum
@@ -702,14 +703,14 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
               </div>
               <div className="divide-y-2 divide-black/10 border-y-[3px] border-black py-1">
                 <DetailRow label="Your USDC" value={formatAmount(saleState.usdcBalance, USDC_DECIMALS)} compact />
-                <DetailRow label="Already Bought" value={`${formatAmount(saleState.buyerQpad, QPAD_DECIMALS)} TQPAD`} compact />
+                <DetailRow label="Already Bought" value={`${formatAmount(saleState.buyerQpad, QPAD_DECIMALS)} ${sale.symbol}`} compact />
               </div>
               <div>
-                <label htmlFor="tqpad-amount" className="mb-2 block text-xs font-black uppercase tracking-[0.14em]">
+                <label htmlFor="qpad-amount" className="mb-2 block text-xs font-black uppercase tracking-[0.14em]">
                   USDC Amount
                 </label>
                 <Input
-                  id="tqpad-amount"
+                  id="qpad-amount"
                   value={amount}
                   onChange={(event) => setAmount(event.target.value)}
                   inputMode="decimal"
@@ -718,8 +719,8 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
               </div>
               {expectedQpad > 0n && (
                 <div className="bg-[#E8F7FF] px-4 py-3 font-bold">
-                  <p className="text-xs font-black uppercase tracking-[0.14em] text-black/60">Expected TQPAD</p>
-                  <p className="mt-1 text-lg font-black">{formatAmount(expectedQpad, QPAD_DECIMALS)} TQPAD</p>
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-black/60">Expected {sale.symbol}</p>
+                  <p className="mt-1 text-lg font-black">{formatAmount(expectedQpad, QPAD_DECIMALS)} {sale.symbol}</p>
                 </div>
               )}
               {inputError && <p className="text-sm font-bold text-[#B42318]">{inputError}</p>}
@@ -729,14 +730,14 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
                 onClick={
                   !isEvmConnected
                     ? connectEthereumWallet
-                    : ethChainId !== sepolia.id
-                      ? switchToSepolia
+                    : ethChainId !== mainnet.id
+                      ? switchToEthereum
                     : needsApproval
                       ? approveUsdc
-                      : buyTqpad
+                      : buyQpad
                 }
                 disabled={
-                  (isEvmConnected && ethChainId === sepolia.id && !canSubmit) ||
+                  (isEvmConnected && ethChainId === mainnet.id && !canSubmit) ||
                   isSwitchingChain ||
                   isApproving ||
                   isBuying
@@ -750,12 +751,12 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
               {trackedPurchase && <PurchaseStatusPanel tracker={trackedPurchase} />}
               {lastEthTxHash && (
                 <a
-                  href={`${SEPOLIA_EXPLORER_URL}/tx/${lastEthTxHash}`}
+                  href={`${ETHERSCAN_URL}/tx/${lastEthTxHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-xs font-black uppercase tracking-[0.14em] underline"
                 >
-                  View Sepolia Tx <ArrowUpRight className="h-3 w-3" />
+                  View Ethereum Tx <ArrowUpRight className="h-3 w-3" />
                 </a>
               )}
             </CardContent>
@@ -804,11 +805,11 @@ function PurchaseStatusPanel({ tracker }: { tracker: PurchaseTracker }) {
                 : "Allocation Failed";
   const description =
     tracker.stage === "submitted"
-      ? "Your Sepolia transaction is pending."
+      ? "Your Ethereum transaction is pending."
       : tracker.stage === "waiting_confirmations"
         ? "The runner waits for the configured confirmation depth before signing on QF."
         : tracker.stage === "waiting_runner"
-          ? "Sepolia is confirmed. The runner has not registered the QF allocation yet."
+          ? "Ethereum is confirmed. The runner has not registered the QF allocation yet."
           : tracker.stage === "registering"
             ? "The runner is submitting the allocation to the QF vault."
             : tracker.stage === "status_unavailable"
@@ -835,7 +836,7 @@ function PurchaseStatusPanel({ tracker }: { tracker: PurchaseTracker }) {
       <p className="mt-2 text-black/70">{description}</p>
       <div className="mt-3 space-y-1 text-xs font-black uppercase tracking-[0.1em] text-black/60">
         <p>Tx {shortAddress(tracker.txHash)}</p>
-        {qpadAmount && <p>Allocation {qpadAmount} TQPAD</p>}
+        {qpadAmount && <p>Allocation {qpadAmount} QPAD</p>}
         {tracker.qfTxHash && <p>QF Tx {shortAddress(tracker.qfTxHash)}</p>}
         {tracker.qfAccountSs58 && <p>QF {shortAddress(tracker.qfAccountSs58)}</p>}
       </div>

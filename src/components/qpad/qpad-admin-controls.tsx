@@ -13,7 +13,7 @@ import {
   parseUnits,
   type Address,
 } from "viem";
-import { sepolia } from "viem/chains";
+import { mainnet } from "viem/chains";
 import {
   useAccount as useEvmAccount,
   useChainId as useEvmChainId,
@@ -27,9 +27,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
-  TQPAD_CLAIM_VAULT_ADDRESS,
-  TQPAD_QF_TOKEN_ADDRESS,
-  TQPAD_TEST_PRESALE_ADDRESS,
+  QPAD_CLAIM_VAULT_ADDRESS,
+  QPAD_ETH_MAINNET_PRESALE_ADDRESS,
+  QPAD_TOKEN_ADDRESS,
 } from "@/config/static-presales";
 import {
   useAccount as useQfAccount,
@@ -40,11 +40,12 @@ import { getFriendlyTxErrorMessage } from "@/lib/utils/tx-errors";
 
 const QPAD_DECIMALS = 18;
 const USDC_DECIMALS = 6;
-const SEPOLIA_RPC_URL = "https://ethereum-sepolia-rpc.publicnode.com";
+const ETH_MAINNET_RPC_URL =
+  import.meta.env.VITE_ETH_MAINNET_RPC_URL || "https://eth-mainnet.g.alchemy.com/v2/GRqk_Y0D98nc4YsmnLM1p-PhLjupA2pT";
 
-const sepoliaClient = createPublicClient({
-  chain: sepolia,
-  transport: http(SEPOLIA_RPC_URL),
+const ethereumClient = createPublicClient({
+  chain: mainnet,
+  transport: http(ETH_MAINNET_RPC_URL),
 });
 
 const qpadClaimVaultAbi = parseAbi([
@@ -176,15 +177,15 @@ export function QpadAdminControls() {
   const [newEndTimestamp, setNewEndTimestamp] = useState("");
 
   const qfVaultContracts = useMemo(() => [
-    { abi: qpadClaimVaultAbi, address: TQPAD_CLAIM_VAULT_ADDRESS, functionName: "owner" },
-    { abi: qpadClaimVaultAbi, address: TQPAD_CLAIM_VAULT_ADDRESS, functionName: "allocator" },
-    { abi: qpadClaimVaultAbi, address: TQPAD_CLAIM_VAULT_ADDRESS, functionName: "claimsEnabled" },
-    { abi: qpadClaimVaultAbi, address: TQPAD_CLAIM_VAULT_ADDRESS, functionName: "paused" },
-    { abi: qpadClaimVaultAbi, address: TQPAD_CLAIM_VAULT_ADDRESS, functionName: "maxTotalAllocation" },
-    { abi: qpadClaimVaultAbi, address: TQPAD_CLAIM_VAULT_ADDRESS, functionName: "totalAllocated" },
-    { abi: qpadClaimVaultAbi, address: TQPAD_CLAIM_VAULT_ADDRESS, functionName: "totalClaimed" },
-    { abi: qpadClaimVaultAbi, address: TQPAD_CLAIM_VAULT_ADDRESS, functionName: "unallocatedTokenBalance" },
-    { abi: erc20Abi, address: TQPAD_QF_TOKEN_ADDRESS, functionName: "balanceOf", args: [TQPAD_CLAIM_VAULT_ADDRESS] },
+    { abi: qpadClaimVaultAbi, address: QPAD_CLAIM_VAULT_ADDRESS, functionName: "owner" },
+    { abi: qpadClaimVaultAbi, address: QPAD_CLAIM_VAULT_ADDRESS, functionName: "allocator" },
+    { abi: qpadClaimVaultAbi, address: QPAD_CLAIM_VAULT_ADDRESS, functionName: "claimsEnabled" },
+    { abi: qpadClaimVaultAbi, address: QPAD_CLAIM_VAULT_ADDRESS, functionName: "paused" },
+    { abi: qpadClaimVaultAbi, address: QPAD_CLAIM_VAULT_ADDRESS, functionName: "maxTotalAllocation" },
+    { abi: qpadClaimVaultAbi, address: QPAD_CLAIM_VAULT_ADDRESS, functionName: "totalAllocated" },
+    { abi: qpadClaimVaultAbi, address: QPAD_CLAIM_VAULT_ADDRESS, functionName: "totalClaimed" },
+    { abi: qpadClaimVaultAbi, address: QPAD_CLAIM_VAULT_ADDRESS, functionName: "unallocatedTokenBalance" },
+    { abi: erc20Abi, address: QPAD_TOKEN_ADDRESS, functionName: "balanceOf", args: [QPAD_CLAIM_VAULT_ADDRESS] },
   ], []);
 
   const {
@@ -204,16 +205,16 @@ export function QpadAdminControls() {
     refetch: refetchEvmPresale,
   } = useEvmReadContracts({
     contracts: [
-      { abi: qpadPresaleAbi, address: TQPAD_TEST_PRESALE_ADDRESS, functionName: "owner", chainId: sepolia.id },
-      { abi: qpadPresaleAbi, address: TQPAD_TEST_PRESALE_ADDRESS, functionName: "paused", chainId: sepolia.id },
-      { abi: qpadPresaleAbi, address: TQPAD_TEST_PRESALE_ADDRESS, functionName: "isSaleOpen", chainId: sepolia.id },
-      { abi: qpadPresaleAbi, address: TQPAD_TEST_PRESALE_ADDRESS, functionName: "endedEarly", chainId: sepolia.id },
-      { abi: qpadPresaleAbi, address: TQPAD_TEST_PRESALE_ADDRESS, functionName: "endedAt", chainId: sepolia.id },
-      { abi: qpadPresaleAbi, address: TQPAD_TEST_PRESALE_ADDRESS, functionName: "totalRaised", chainId: sepolia.id },
-      { abi: qpadPresaleAbi, address: TQPAD_TEST_PRESALE_ADDRESS, functionName: "totalQpadSold", chainId: sepolia.id },
-      { abi: qpadPresaleAbi, address: TQPAD_TEST_PRESALE_ADDRESS, functionName: "remainingUsdcCap", chainId: sepolia.id },
-      { abi: qpadPresaleAbi, address: TQPAD_TEST_PRESALE_ADDRESS, functionName: "remainingQpadForSale", chainId: sepolia.id },
-      { abi: qpadPresaleAbi, address: TQPAD_TEST_PRESALE_ADDRESS, functionName: "saleConfig", chainId: sepolia.id },
+      { abi: qpadPresaleAbi, address: QPAD_ETH_MAINNET_PRESALE_ADDRESS, functionName: "owner", chainId: mainnet.id },
+      { abi: qpadPresaleAbi, address: QPAD_ETH_MAINNET_PRESALE_ADDRESS, functionName: "paused", chainId: mainnet.id },
+      { abi: qpadPresaleAbi, address: QPAD_ETH_MAINNET_PRESALE_ADDRESS, functionName: "isSaleOpen", chainId: mainnet.id },
+      { abi: qpadPresaleAbi, address: QPAD_ETH_MAINNET_PRESALE_ADDRESS, functionName: "endedEarly", chainId: mainnet.id },
+      { abi: qpadPresaleAbi, address: QPAD_ETH_MAINNET_PRESALE_ADDRESS, functionName: "endedAt", chainId: mainnet.id },
+      { abi: qpadPresaleAbi, address: QPAD_ETH_MAINNET_PRESALE_ADDRESS, functionName: "totalRaised", chainId: mainnet.id },
+      { abi: qpadPresaleAbi, address: QPAD_ETH_MAINNET_PRESALE_ADDRESS, functionName: "totalQpadSold", chainId: mainnet.id },
+      { abi: qpadPresaleAbi, address: QPAD_ETH_MAINNET_PRESALE_ADDRESS, functionName: "remainingUsdcCap", chainId: mainnet.id },
+      { abi: qpadPresaleAbi, address: QPAD_ETH_MAINNET_PRESALE_ADDRESS, functionName: "remainingQpadForSale", chainId: mainnet.id },
+      { abi: qpadPresaleAbi, address: QPAD_ETH_MAINNET_PRESALE_ADDRESS, functionName: "saleConfig", chainId: mainnet.id },
     ],
     query: {
       refetchInterval: 15_000,
@@ -256,7 +257,7 @@ export function QpadAdminControls() {
     setQfAction(label);
     try {
       await writeQfContractAsync({
-        address: TQPAD_CLAIM_VAULT_ADDRESS,
+        address: QPAD_CLAIM_VAULT_ADDRESS,
         abi: qpadClaimVaultAbi,
         functionName,
         args,
@@ -271,12 +272,12 @@ export function QpadAdminControls() {
     }
   }, [refetchQfVault, writeQfContractAsync]);
 
-  const ensureSepolia = useCallback(async () => {
+  const ensureEthereum = useCallback(async () => {
     if (!isEvmConnected || !evmAddress) {
       throw new Error("Connect the owner EVM wallet first.");
     }
-    if (evmChainId !== sepolia.id) {
-      await switchChainAsync({ chainId: sepolia.id });
+    if (evmChainId !== mainnet.id) {
+      await switchChainAsync({ chainId: mainnet.id });
     }
   }, [evmAddress, evmChainId, isEvmConnected, switchChainAsync]);
 
@@ -287,24 +288,24 @@ export function QpadAdminControls() {
   ) => {
     setEvmAction(label);
     try {
-      await ensureSepolia();
+      await ensureEthereum();
       const hash = functionName === "extendSaleEnd"
         ? await writeEvmContractAsync({
-          chainId: sepolia.id,
-          address: TQPAD_TEST_PRESALE_ADDRESS,
+          chainId: mainnet.id,
+          address: QPAD_ETH_MAINNET_PRESALE_ADDRESS,
           abi: qpadPresaleAbi,
           functionName,
           args: args ?? [0n],
         })
         : await writeEvmContractAsync({
-          chainId: sepolia.id,
-          address: TQPAD_TEST_PRESALE_ADDRESS,
+          chainId: mainnet.id,
+          address: QPAD_ETH_MAINNET_PRESALE_ADDRESS,
           abi: qpadPresaleAbi,
           functionName,
         });
-      toast.success(`${label} sent on Sepolia.`);
-      await sepoliaClient.waitForTransactionReceipt({ hash });
-      toast.success(`${label} confirmed on Sepolia.`);
+      toast.success(`${label} sent on Ethereum.`);
+      await ethereumClient.waitForTransactionReceipt({ hash });
+      toast.success(`${label} confirmed on Ethereum.`);
       await refetchEvmPresale();
     } catch (error) {
       console.error(`${label} failed`, error);
@@ -312,7 +313,7 @@ export function QpadAdminControls() {
     } finally {
       setEvmAction(null);
     }
-  }, [ensureSepolia, refetchEvmPresale, writeEvmContractAsync]);
+  }, [ensureEthereum, refetchEvmPresale, writeEvmContractAsync]);
 
   const handleSetAllocator = () => {
     if (!isAddress(newAllocator)) {
@@ -327,7 +328,7 @@ export function QpadAdminControls() {
       const cap = parseTokenAmount(newAllocationCap, QPAD_DECIMALS);
       void runQfVaultAction("Set allocation cap", "setMaxTotalAllocation", [cap]);
     } catch {
-      toast.error("Enter a valid TQPAD cap.");
+      toast.error("Enter a valid QPAD cap.");
     }
   };
 
@@ -338,12 +339,12 @@ export function QpadAdminControls() {
     }
     try {
       const amount = parseTokenAmount(recoverAmount, QPAD_DECIMALS);
-      void runQfVaultAction("Recover unallocated TQPAD", "recoverUnallocatedTokens", [
+      void runQfVaultAction("Recover unallocated QPAD", "recoverUnallocatedTokens", [
         recoverTo as Address,
         amount,
       ]);
     } catch {
-      toast.error("Enter a valid TQPAD recovery amount. Leave blank for all.");
+      toast.error("Enter a valid QPAD recovery amount. Leave blank for all.");
     }
   };
 
@@ -371,16 +372,16 @@ export function QpadAdminControls() {
         </CardHeader>
         <CardContent className="space-y-5 p-6">
           <div className="grid gap-3 sm:grid-cols-2">
-            <AdminMetric label="Vault" value={shortAddress(TQPAD_CLAIM_VAULT_ADDRESS)} />
+            <AdminMetric label="Vault" value={shortAddress(QPAD_CLAIM_VAULT_ADDRESS)} />
             <AdminMetric label="Owner" value={shortAddress(vaultOwner)} />
             <AdminMetric label="Allocator" value={shortAddress(vaultAllocator)} />
             <AdminMetric label="Claims" value={claimsEnabled ? "Enabled" : "Disabled"} />
             <AdminMetric label="Paused" value={vaultPaused ? "Yes" : "No"} />
-            <AdminMetric label="Vault Balance" value={`${formatAmount(vaultTokenBalance, QPAD_DECIMALS)} TQPAD`} />
-            <AdminMetric label="Allocated" value={`${formatAmount(totalAllocated, QPAD_DECIMALS)} TQPAD`} />
-            <AdminMetric label="Claimed" value={`${formatAmount(totalClaimed, QPAD_DECIMALS)} TQPAD`} />
-            <AdminMetric label="Unallocated" value={`${formatAmount(unallocatedBalance, QPAD_DECIMALS)} TQPAD`} />
-            <AdminMetric label="Allocation Cap" value={`${formatAmount(maxTotalAllocation, QPAD_DECIMALS)} TQPAD`} />
+            <AdminMetric label="Vault Balance" value={`${formatAmount(vaultTokenBalance, QPAD_DECIMALS)} QPAD`} />
+            <AdminMetric label="Allocated" value={`${formatAmount(totalAllocated, QPAD_DECIMALS)} QPAD`} />
+            <AdminMetric label="Claimed" value={`${formatAmount(totalClaimed, QPAD_DECIMALS)} QPAD`} />
+            <AdminMetric label="Unallocated" value={`${formatAmount(unallocatedBalance, QPAD_DECIMALS)} QPAD`} />
+            <AdminMetric label="Allocation Cap" value={`${formatAmount(maxTotalAllocation, QPAD_DECIMALS)} QPAD`} />
           </div>
 
           <div className="border-2 border-black bg-[#FFF2D5] p-3 text-xs font-bold">
@@ -438,7 +439,7 @@ export function QpadAdminControls() {
               <Input
                 value={newAllocationCap}
                 onChange={(event) => setNewAllocationCap(event.target.value)}
-                placeholder="Allocation cap in TQPAD"
+                placeholder="Allocation cap in QPAD"
                 className="border-2 border-black"
               />
               <Button type="button" disabled={qfBusy || !qfMappedAddress} onClick={handleSetAllocationCap}>
@@ -469,7 +470,7 @@ export function QpadAdminControls() {
       <Card className="before:hidden border-4 border-black shadow-[4px_4px_0_rgba(0,0,0,1)]">
         <CardHeader className="border-b-2 border-black bg-[#FFF2D5]">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <CardTitle className="font-black uppercase tracking-wider">Sepolia Presale</CardTitle>
+            <CardTitle className="font-black uppercase tracking-wider">Ethereum Presale</CardTitle>
             <Badge className="bg-[#42C9FF]">Signed with EVM Wallet</Badge>
           </div>
         </CardHeader>
@@ -482,16 +483,16 @@ export function QpadAdminControls() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <AdminMetric label="Presale" value={shortAddress(TQPAD_TEST_PRESALE_ADDRESS)} />
+            <AdminMetric label="Presale" value={shortAddress(QPAD_ETH_MAINNET_PRESALE_ADDRESS)} />
             <AdminMetric label="Owner" value={shortAddress(presaleOwner)} />
             <AdminMetric label="Status" value={isSaleOpen ? "Open" : "Closed"} />
             <AdminMetric label="Paused" value={presalePaused ? "Yes" : "No"} />
             <AdminMetric label="Ended Early" value={endedEarly ? "Yes" : "No"} />
             <AdminMetric label="Ended At" value={formatDate(endedAt)} />
             <AdminMetric label="Raised" value={`${formatAmount(totalRaised, USDC_DECIMALS)} USDC`} />
-            <AdminMetric label="QPAD Sold" value={`${formatAmount(totalQpadSold, QPAD_DECIMALS)} TQPAD`} />
+            <AdminMetric label="QPAD Sold" value={`${formatAmount(totalQpadSold, QPAD_DECIMALS)} QPAD`} />
             <AdminMetric label="USDC Remaining" value={`${formatAmount(remainingUsdcCap, USDC_DECIMALS)} USDC`} />
-            <AdminMetric label="QPAD Remaining" value={`${formatAmount(remainingQpadForSale, QPAD_DECIMALS)} TQPAD`} />
+            <AdminMetric label="QPAD Remaining" value={`${formatAmount(remainingQpadForSale, QPAD_DECIMALS)} QPAD`} />
             <AdminMetric label="Start" value={formatDate(saleConfig?.[0])} />
             <AdminMetric label="End" value={formatDate(saleConfig?.[1])} />
           </div>

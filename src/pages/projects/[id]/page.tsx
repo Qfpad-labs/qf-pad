@@ -16,14 +16,14 @@ import { formatUnits } from "viem";
 import { Badge } from "@/components/ui/badge";
 import { getPresaleMetadata } from "@/config/presale-metadata";
 import { getQpadExternalSaleById } from "@/config/static-presales";
-import { TqpadTestPresale } from "@/components/qpad/tqpad-test-presale";
+import { QpadExternalPresale } from "@/components/qpad/tqpad-test-presale";
 
 export default function ProjectDetailPage() {
   const { id } = useParams(); // This is the presale_address
   const qpadExternalSale = getQpadExternalSaleById(id);
 
   if (qpadExternalSale) {
-    return <TqpadTestPresale sale={qpadExternalSale} />;
+    return <QpadExternalPresale sale={qpadExternalSale} />;
   }
 
   return <LaunchpadProjectDetailPage id={id} />;
