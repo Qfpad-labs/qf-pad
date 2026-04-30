@@ -541,7 +541,7 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
   }, [claimableNow, refetchQfState, sale.claimVaultAddress, sale.symbol, writeContractAsync]);
 
   const ethCta = !isEvmConnected
-    ? "Connect Ethereum Wallet"
+    ? "Contribute"
     : ethChainId !== mainnet.id
       ? "Switch to Ethereum"
       : needsApproval
@@ -666,7 +666,7 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
                   </div>
                 ) : (
                   <Button type="button" className="mt-3 w-full" onClick={connectEthereumWallet}>
-                    Connect Ethereum
+                    Connect Metamask
                   </Button>
                 )}
               </div>
@@ -744,7 +744,7 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
                 className="w-full"
                 onClick={
                   !isEvmConnected
-                    ? connectEthereumWallet
+                    ? undefined
                     : ethChainId !== mainnet.id
                       ? switchToEthereum
                     : needsApproval
@@ -752,6 +752,7 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
                       : buyQpad
                 }
                 disabled={
+                  !isEvmConnected ||
                   (isEvmConnected && ethChainId === mainnet.id && !canSubmit) ||
                   isSwitchingChain ||
                   isApproving ||
