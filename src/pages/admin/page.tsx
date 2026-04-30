@@ -2,6 +2,7 @@ import { AdminRoute } from "@/components/admin/AdminRoute";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { QpadAdminControls } from "@/components/qpad/qpad-admin-controls";
 import { useAccount } from "@/lib/papi/hooks";
 import { useFactoryOwner, useFeeRecipient } from "@/lib/utils/admin";
 import { useSetFeeRecipient } from "@/lib/hooks/useAdminActions";
@@ -184,6 +185,8 @@ function AdminDashboardContent() {
           </CardContent>
         </Card>
       </div>
+
+      <QpadAdminControls />
 
       {/* Update Fee Recipient */}
       <Card className="before:hidden border-4 border-black shadow-[4px_4px_0_rgba(0,0,0,1)]">

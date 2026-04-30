@@ -15,9 +15,21 @@ import { PresaleParticipationForm } from "@/components/ui/presale-participation-
 import { formatUnits } from "viem";
 import { Badge } from "@/components/ui/badge";
 import { getPresaleMetadata } from "@/config/presale-metadata";
+import { getQpadExternalSaleById } from "@/config/static-presales";
+import { TqpadTestPresale } from "@/components/qpad/tqpad-test-presale";
 
 export default function ProjectDetailPage() {
   const { id } = useParams(); // This is the presale_address
+  const qpadExternalSale = getQpadExternalSaleById(id);
+
+  if (qpadExternalSale) {
+    return <TqpadTestPresale sale={qpadExternalSale} />;
+  }
+
+  return <LaunchpadProjectDetailPage id={id} />;
+}
+
+function LaunchpadProjectDetailPage({ id }: { id: string | undefined }) {
   const {
     presale,
     isLoading: isLoadingPresale,
@@ -25,7 +37,7 @@ export default function ProjectDetailPage() {
   const { markets, isLoading: isLoadingMarkets } = useMarkets();
   const metadata = useMemo(
     () => (presale?.address ? getPresaleMetadata(presale.address) : id ? getPresaleMetadata(id) : undefined),
-    [presale?.address, id]
+    [presale, id]
   );
 
   // React purity rule: avoid calling `Date.now()` during render.

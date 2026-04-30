@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { PresaleCard } from "@/components/ui/presale-card";
 import { useLaunchpadPresales } from "@/lib/hooks/useLaunchpadPresales";
 import type { LaunchpadPresaleFilter } from "@/lib/hooks/useLaunchpadPresales";
-import { getQpadStaticPresale, QPAD_TOKEN_ADDRESS } from "@/config/static-presales";
+import { getQpadStaticPresales } from "@/config/static-presales";
 
 const filterOptions: Array<{ label: string; value: LaunchpadPresaleFilter; color: string }> = [
   { label: "All", value: "all", color: "bg-[#42C9FF]" },
@@ -38,14 +38,14 @@ export default function ProjectsPage() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const qpadPresale = useMemo(() => getQpadStaticPresale(nowMs), [nowMs]);
+  const staticPresales = useMemo(() => getQpadStaticPresales(nowMs), [nowMs]);
   const allPresales = useMemo(() => {
-    const qpadAddress = QPAD_TOKEN_ADDRESS.toLowerCase();
+    const staticAddresses = new Set(staticPresales.map((presale) => presale.address.toLowerCase()));
     return [
-      qpadPresale,
-      ...presales.filter((presale) => presale.address.toLowerCase() !== qpadAddress && !isHiddenProject(presale)),
+      ...staticPresales,
+      ...presales.filter((presale) => !staticAddresses.has(presale.address.toLowerCase()) && !isHiddenProject(presale)),
     ];
-  }, [presales, qpadPresale]);
+  }, [presales, staticPresales]);
 
   const filteredPresales = allPresales.filter((presale) => {
     if (!presale) return false;

@@ -1,6 +1,8 @@
 import { useIsAdmin } from "@/lib/utils/admin";
 import { useConnectModal } from "@/lib/papi/hooks";
 import { useReactPriceUsd } from "@/lib/hooks/useReactPriceUsd";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { useDisconnect as useEvmDisconnect } from "wagmi";
 import {
   LayoutDashboard,
   Layers,
@@ -31,6 +33,65 @@ const navItems = [
 
 const actionButtonClass =
   "w-full border-[2px] border-black px-3 py-2.5 text-[10px] font-black uppercase tracking-[0.14em] [box-shadow:0_0_0_1px_#000,5px_5px_0_0_#000] transition-all hover:[box-shadow:0_0_0_1px_#000,8px_8px_0_0_#000] hover:-translate-x-1 hover:-translate-y-1";
+
+function shortAddress(address?: string) {
+  if (!address) return "";
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function CompactEvmWalletButton() {
+  const { disconnect: disconnectEvmWallet } = useEvmDisconnect();
+
+  return (
+    <ConnectButton.Custom>
+      {({
+        account,
+        chain,
+        mounted,
+        openAccountModal,
+        openChainModal,
+        openConnectModal,
+      }) => {
+        const connected = mounted && account && chain;
+
+        return (
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (!connected) {
+                  openConnectModal();
+                  return;
+                }
+                if (chain.unsupported) {
+                  openChainModal();
+                  return;
+                }
+                openAccountModal();
+              }}
+              className={`${actionButtonClass} bg-[#42C9FF] text-black`}
+            >
+              {!connected
+                ? "Connect EVM"
+                : chain.unsupported
+                  ? "Wrong EVM Network"
+                  : `${account.displayName} · ${chain.name}`}
+            </button>
+            {connected && (
+              <button
+                type="button"
+                onClick={() => disconnectEvmWallet()}
+                className={`${actionButtonClass} bg-white text-black`}
+              >
+                Disconnect EVM
+              </button>
+            )}
+          </div>
+        );
+      }}
+    </ConnectButton.Custom>
+  );
+}
 
 const SidebarContent = () => {
   const pathname = useLocation().pathname;
@@ -65,7 +126,7 @@ const SidebarContent = () => {
       </div>
 
       {isConnected && (
-        <div className="mx-4 mt-4 -rotate-[0.45deg] border-[2px] border-black bg-[#FFF2D5] p-4 text-black [box-shadow:0_0_0_1px_#000,6px_6px_0_0_#000]">
+        <div className="mx-4 mt-4 hidden -rotate-[0.45deg] border-[2px] border-black bg-[#FFF2D5] p-4 text-black [box-shadow:0_0_0_1px_#000,6px_6px_0_0_#000] lg:block">
           <div className="mb-3 flex items-center justify-between">
             <span className="text-xs font-mono font-black uppercase">
               {address?.slice(0, 6)}...{address?.slice(-4)}
@@ -112,6 +173,32 @@ const SidebarContent = () => {
           </div>
         </div>
       )}
+
+      <div className="mx-4 mt-4 border-[2px] border-black bg-[#FFF2D5] p-3 text-black [box-shadow:0_0_0_1px_#000,5px_5px_0_0_#000] lg:hidden">
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-xs font-black uppercase tracking-[0.16em]">Wallets</p>
+          <WalletMinimal size={17} strokeWidth={2.5} />
+        </div>
+        <div className="space-y-3">
+          {isConnected ? (
+            <div className="flex items-center justify-between gap-3 border-[2px] border-black bg-white px-3 py-2 text-[10px] font-black uppercase tracking-[0.12em]">
+              <span>QF {shortAddress(address)}</span>
+              <button type="button" onClick={() => disconnect()} className="underline">
+                Disconnect
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={openConnectModal}
+              type="button"
+              className={`${actionButtonClass} bg-[#B8EF53] text-black`}
+            >
+              Connect QF
+            </button>
+          )}
+          <CompactEvmWalletButton />
+        </div>
+      </div>
 
       <nav className="flex-1 px-4 py-5">
         <ul className="space-y-4">
@@ -172,7 +259,7 @@ const SidebarContent = () => {
             <button
               onClick={openConnectModal}
               type="button"
-              className={`${actionButtonClass} bg-[#B8EF53] text-black`}
+              className={`${actionButtonClass} hidden bg-[#B8EF53] text-black lg:block`}
             >
               Connect Wallet
             </button>
