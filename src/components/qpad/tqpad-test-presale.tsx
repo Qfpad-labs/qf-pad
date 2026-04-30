@@ -694,13 +694,13 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
               <CardTitle>Contribute</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="border-y-[3px] border-black py-3">
+              <div className="border-b-[3px] border-black pb-4">
                 <p className="text-xs font-black uppercase tracking-[0.14em] text-black/55">
                   Sale Ends In
                 </p>
                 <p className="mt-1 font-mono text-xl font-black">{saleCountdown}</p>
               </div>
-              <div className="divide-y-2 divide-black/10 border-y-[3px] border-black py-1">
+              <div className="divide-y-2 divide-black/10">
                 <DetailRow label="Your USDC" value={formatAmount(saleState.usdcBalance, USDC_DECIMALS)} compact />
                 <DetailRow label="Already Bought" value={`${formatAmount(saleState.buyerQpad, QPAD_DECIMALS)} ${sale.symbol}`} compact />
               </div>
