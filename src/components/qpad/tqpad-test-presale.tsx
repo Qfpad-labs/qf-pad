@@ -6,7 +6,9 @@ import {
   createPublicClient,
   erc20Abi,
   formatUnits,
+  getAddress,
   http,
+  keccak256,
   parseAbi,
   parseUnits,
   toHex,
@@ -164,6 +166,16 @@ function toQfAccountId32(ss58Address: string | undefined): Hex | undefined {
   }
 }
 
+function getManualQfRecipient(ss58Address: string) {
+  const accountId32 = toQfAccountId32(ss58Address);
+  if (!accountId32) return null;
+  const hash = keccak256(accountId32);
+  return {
+    accountId32,
+    mappedRecipient: getAddress(`0x${hash.slice(-40)}`) as Address,
+  };
+}
+
 function getAmountRaw(amount: string) {
   try {
     return amount.trim() ? parseUnits(amount, USDC_DECIMALS) : 0n;
@@ -191,7 +203,7 @@ function getTrackerStage(status: QpadPurchaseStatusResponse["status"], found: bo
 }
 
 export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) {
-  const { address: qfMappedRecipient, ss58Address } = useQfAccount();
+  const { address: connectedQfMappedRecipient, ss58Address: connectedSs58Address } = useQfAccount();
   const { openConnectModal: openQfConnectModal } = useQfConnectModal();
   const { writeContractAsync, isPending: isClaimPending, error: claimError } = useQfWriteContract();
   const { address: ethAccount, isConnected: isEvmConnected } = useEvmAccount();
@@ -202,6 +214,7 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
   const { writeContractAsync: writeEvmContractAsync } = useEvmWriteContract();
 
   const [amount, setAmount] = useState("");
+  const [manualQfAddress, setManualQfAddress] = useState("");
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [saleState, setSaleState] = useState<SaleState>(emptySaleState);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -209,7 +222,17 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
   const [isBuying, setIsBuying] = useState(false);
   const [trackedPurchase, setTrackedPurchase] = useState<PurchaseTracker | null>(null);
 
-  const qfAccountId32 = useMemo(() => toQfAccountId32(ss58Address), [ss58Address]);
+  const manualQfAddressTrimmed = manualQfAddress.trim();
+  const manualQfRecipient = useMemo(
+    () => (manualQfAddressTrimmed ? getManualQfRecipient(manualQfAddressTrimmed) : null),
+    [manualQfAddressTrimmed],
+  );
+  const manualQfError = manualQfAddressTrimmed && !manualQfRecipient ? "Enter a valid QF address." : null;
+  const qfMappedRecipient = connectedQfMappedRecipient ?? manualQfRecipient?.mappedRecipient;
+  const qfAccountId32 = connectedSs58Address ? toQfAccountId32(connectedSs58Address) : manualQfRecipient?.accountId32;
+  const activeQfSs58Address = connectedSs58Address ?? (manualQfRecipient ? manualQfAddressTrimmed : undefined);
+  const hasConnectedQfWallet = !!connectedQfMappedRecipient;
+  const hasQfRecipient = !!qfMappedRecipient && !!qfAccountId32;
   const amountRaw = useMemo(() => getAmountRaw(amount), [amount]);
   const expectedQpad = useMemo(() => (amountRaw * 225n * 10n ** 18n) / USDC_UNIT, [amountRaw]);
   const saleCountdown = useMemo(() => formatCountdown(sale.endTime, nowMs), [sale.endTime, nowMs]);
@@ -448,8 +471,7 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
     saleState.isSaleOpen &&
     !!ethAccount &&
     ethChainId === mainnet.id &&
-    !!qfMappedRecipient &&
-    !!qfAccountId32 &&
+    hasQfRecipient &&
     amountRaw > 0n &&
     !inputError &&
     !isSwitchingChain &&
@@ -534,6 +556,13 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
       : needsApproval
         ? "Approve USDC"
         : "Contribute";
+  const claimCta = !hasConnectedQfWallet
+    ? "Connect QF Wallet to Claim"
+    : isClaimPending
+      ? "Claiming..."
+      : claimsEnabled
+        ? `Claim ${sale.symbol}`
+        : "Claims Not Enabled";
 
   return (
     <div className="container mx-auto px-4 py-8 text-black md:py-12">
@@ -551,9 +580,9 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
           </div>
         </div>
         <div className="flex flex-wrap gap-3">
-          {!qfMappedRecipient && (
+          {!hasQfRecipient && (
             <Button type="button" className="lg:hidden" onClick={openQfConnectModal}>
-              Connect Wallet
+              Connect QF Wallet
             </Button>
           )}
           <Button type="button" variant="outline" onClick={() => refreshSaleState(ethAccount)} disabled={isRefreshing}>
@@ -623,9 +652,9 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
                 type="button"
                 className="w-full"
                 onClick={claimQpad}
-                disabled={!qfMappedRecipient || !claimsEnabled || claimableNow === 0n || isClaimPending}
+                disabled={!hasConnectedQfWallet || !claimsEnabled || claimableNow === 0n || isClaimPending}
               >
-                {isClaimPending ? "Claiming..." : claimsEnabled ? `Claim ${sale.symbol}` : "Claims Not Enabled"}
+                {claimCta}
               </Button>
               {claimedByRecipient > 0n && (
                 <p className="text-sm font-bold text-black/70">
@@ -645,9 +674,14 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
             <CardContent className="space-y-4">
               <div className="space-y-2 border-b-[3px] border-black pb-4">
                 <p className="text-xs font-black uppercase tracking-[0.14em]">QF Wallet</p>
-                {qfMappedRecipient ? (
+                {connectedQfMappedRecipient ? (
                   <div className="space-y-1 text-sm font-bold text-black/70">
-                    <p>SS58 {shortAddress(ss58Address)}</p>
+                    <p>SS58 {shortAddress(connectedSs58Address)}</p>
+                    <p>Mapped {shortAddress(connectedQfMappedRecipient)}</p>
+                  </div>
+                ) : hasQfRecipient ? (
+                  <div className="space-y-1 text-sm font-bold text-black/70">
+                    <p>SS58 {shortAddress(activeQfSs58Address)}</p>
                     <p>Mapped {shortAddress(qfMappedRecipient)}</p>
                   </div>
                 ) : (
@@ -705,6 +739,38 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
                   placeholder="50"
                 />
               </div>
+              <div className="space-y-3 border-[3px] border-black bg-[#FFF6BF] px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <label htmlFor="qpad-qf-address" className="text-xs font-black uppercase tracking-[0.14em]">
+                    QF Claim Address
+                  </label>
+                  <Badge className={hasQfRecipient ? "bg-[#B6F569]" : "bg-[#FF7F41]"}>
+                    {hasQfRecipient ? "Set" : "Required"}
+                  </Badge>
+                </div>
+                {connectedQfMappedRecipient ? (
+                  <div className="space-y-1 text-sm font-bold text-black/70">
+                    <p>SS58 {shortAddress(connectedSs58Address)}</p>
+                    <p>Mapped {shortAddress(connectedQfMappedRecipient)}</p>
+                  </div>
+                ) : (
+                  <>
+                    <Input
+                      id="qpad-qf-address"
+                      value={manualQfAddress}
+                      onChange={(event) => setManualQfAddress(event.target.value)}
+                      placeholder="Paste QF SS58 address"
+                      autoComplete="off"
+                    />
+                    {qfMappedRecipient && (
+                      <p className="text-xs font-black uppercase tracking-[0.1em] text-black/60">
+                        Mapped {shortAddress(qfMappedRecipient)}
+                      </p>
+                    )}
+                    {manualQfError && <p className="text-sm font-bold text-[#B42318]">{manualQfError}</p>}
+                  </>
+                )}
+              </div>
               {expectedQpad > 0n && (
                 <div className="bg-[#E8F7FF] px-4 py-3 font-bold">
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-black/60">Expected {sale.symbol}</p>
@@ -733,8 +799,8 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
               >
                 {isSwitchingChain ? "Switching..." : isApproving ? "Approving..." : isBuying ? "Contributing..." : ethCta}
               </Button>
-              {!qfMappedRecipient && (
-                <p className="text-sm font-bold text-black/65">Connect a QF wallet before contributing.</p>
+              {!hasQfRecipient && (
+                <p className="text-sm font-bold text-black/65">Connect a QF wallet or paste a QF address before contributing.</p>
               )}
               {trackedPurchase && <PurchaseStatusPanel tracker={trackedPurchase} />}
             </CardContent>
