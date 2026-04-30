@@ -46,7 +46,7 @@ import {
 } from "@/lib/qpad/purchase-status";
 
 const ETH_MAINNET_RPC_URL =
-  import.meta.env.VITE_ETH_MAINNET_RPC_URL || "https://eth-mainnet.g.alchemy.com/v2/GRqk_Y0D98nc4YsmnLM1p-PhLjupA2pT";
+  import.meta.env.VITE_ETH_MAINNET_RPC_URL || "https://ethereum-rpc.publicnode.com";
 const ETHERSCAN_URL = "https://etherscan.io";
 const USDC_DECIMALS = 6;
 const QPAD_DECIMALS = 18;
