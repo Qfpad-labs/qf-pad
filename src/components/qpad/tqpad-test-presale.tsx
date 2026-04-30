@@ -26,8 +26,6 @@ import {
   useSwitchChain,
   useWriteContract as useEvmWriteContract,
 } from "wagmi";
-import { RefreshCw } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -37,7 +35,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { QpadExternalSaleConfig } from "@/config/static-presales";
 import {
   useAccount as useQfAccount,
-  useConnectModal as useQfConnectModal,
   useReadContracts as useQfReadContracts,
   useWriteContract as useQfWriteContract,
 } from "@/lib/papi/hooks";
@@ -204,7 +201,6 @@ function getTrackerStage(status: QpadPurchaseStatusResponse["status"], found: bo
 
 export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) {
   const { address: connectedQfMappedRecipient, ss58Address: connectedSs58Address } = useQfAccount();
-  const { openConnectModal: openQfConnectModal } = useQfConnectModal();
   const { writeContractAsync, isPending: isClaimPending, error: claimError } = useQfWriteContract();
   const { address: ethAccount, isConnected: isEvmConnected } = useEvmAccount();
   const ethChainId = useEvmChainId();
@@ -217,7 +213,6 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
   const [manualQfAddress, setManualQfAddress] = useState("");
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [saleState, setSaleState] = useState<SaleState>(emptySaleState);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const [isBuying, setIsBuying] = useState(false);
   const [trackedPurchase, setTrackedPurchase] = useState<PurchaseTracker | null>(null);
@@ -230,7 +225,6 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
   const manualQfError = manualQfAddressTrimmed && !manualQfRecipient ? "Enter a valid QF address." : null;
   const qfMappedRecipient = connectedQfMappedRecipient ?? manualQfRecipient?.mappedRecipient;
   const qfAccountId32 = connectedSs58Address ? toQfAccountId32(connectedSs58Address) : manualQfRecipient?.accountId32;
-  const activeQfSs58Address = connectedSs58Address ?? (manualQfRecipient ? manualQfAddressTrimmed : undefined);
   const hasConnectedQfWallet = !!connectedQfMappedRecipient;
   const hasQfRecipient = !!qfMappedRecipient && !!qfAccountId32;
   const amountRaw = useMemo(() => getAmountRaw(amount), [amount]);
@@ -271,7 +265,6 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
   const recipientQpadBalance = qfMappedRecipient ? ((qfReadResults?.[3]?.result as bigint | undefined) ?? 0n) : 0n;
 
   const refreshSaleState = useCallback(async (account?: Address) => {
-    setIsRefreshing(true);
     try {
       const [isSaleOpen, totalRaised, totalQpadSold, remainingUsdcCap] = await Promise.all([
         ethereumClient.readContract({ address: sale.presaleAddress, abi: qpadPresaleAbi, functionName: "isSaleOpen" }),
@@ -307,8 +300,6 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
     } catch (error) {
       console.error("Failed to refresh QPAD sale state", error);
       toast.error("Unable to refresh QPAD sale data.");
-    } finally {
-      setIsRefreshing(false);
     }
   }, [sale.presaleAddress, sale.usdcAddress]);
 
@@ -578,17 +569,6 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
             </h1>
             <p className="mt-2 max-w-2xl text-lg font-bold text-black/70">{sale.description}</p>
           </div>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          {!hasQfRecipient && (
-            <Button type="button" className="lg:hidden" onClick={openQfConnectModal}>
-              Connect QF Wallet
-            </Button>
-          )}
-          <Button type="button" variant="outline" onClick={() => refreshSaleState(ethAccount)} disabled={isRefreshing}>
-            <RefreshCw className={isRefreshing ? "animate-spin" : ""} />
-            Refresh
-          </Button>
         </div>
       </section>
 
