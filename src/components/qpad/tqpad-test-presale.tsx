@@ -24,7 +24,7 @@ import {
   useSwitchChain,
   useWriteContract as useEvmWriteContract,
 } from "wagmi";
-import { ArrowUpRight, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,11 +47,10 @@ import {
 
 const ETH_MAINNET_RPC_URL =
   import.meta.env.VITE_ETH_MAINNET_RPC_URL || "https://ethereum-rpc.publicnode.com";
-const ETHERSCAN_URL = "https://etherscan.io";
 const USDC_DECIMALS = 6;
 const QPAD_DECIMALS = 18;
 const USDC_UNIT = 1_000_000n;
-const CONFIRMATIONS_REQUIRED = 6;
+const CONFIRMATIONS_REQUIRED = 5;
 
 const ethereumClient = createPublicClient({
   chain: mainnet,
@@ -191,13 +190,6 @@ function getTrackerStage(status: QpadPurchaseStatusResponse["status"], found: bo
   return "waiting_runner";
 }
 
-function formatStatusQpadAmount(amount: string | undefined) {
-  if (!amount) return undefined;
-  const value = Number(amount);
-  if (!Number.isFinite(value)) return amount;
-  return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
-}
-
 export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) {
   const { address: qfMappedRecipient, ss58Address } = useQfAccount();
   const { openConnectModal: openQfConnectModal } = useQfConnectModal();
@@ -215,7 +207,6 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const [isBuying, setIsBuying] = useState(false);
-  const [lastEthTxHash, setLastEthTxHash] = useState<Hex | undefined>();
   const [trackedPurchase, setTrackedPurchase] = useState<PurchaseTracker | null>(null);
 
   const qfAccountId32 = useMemo(() => toQfAccountId32(ss58Address), [ss58Address]);
@@ -385,8 +376,7 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
         : previous);
 
       if (shouldToastRegistered) {
-        const qpadAmount = formatStatusQpadAmount(status.qpadAmount);
-        toast.success(qpadAmount ? `QF allocation registered: ${qpadAmount} ${sale.symbol}` : "QF allocation registered.");
+        toast.success("QPAD allocation registered.");
         await refetchQfState();
         await refreshSaleState(ethAccount);
       }
@@ -502,7 +492,6 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
         functionName: "buy",
         args: [amountRaw, qfAccountId32, qfMappedRecipient, nonce],
       });
-      setLastEthTxHash(hash);
       setTrackedPurchase({
         txHash: hash,
         stage: "submitted",
@@ -748,16 +737,6 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
                 <p className="text-sm font-bold text-black/65">Connect a QF wallet before contributing.</p>
               )}
               {trackedPurchase && <PurchaseStatusPanel tracker={trackedPurchase} />}
-              {lastEthTxHash && (
-                <a
-                  href={`${ETHERSCAN_URL}/tx/${lastEthTxHash}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs font-black uppercase tracking-[0.14em] underline"
-                >
-                  View Ethereum Tx <ArrowUpRight className="h-3 w-3" />
-                </a>
-              )}
             </CardContent>
           </Card>
         </div>
@@ -785,7 +764,6 @@ function DetailRow({ label, value, compact = false }: { label: string; value: st
 }
 
 function PurchaseStatusPanel({ tracker }: { tracker: PurchaseTracker }) {
-  const qpadAmount = formatStatusQpadAmount(tracker.qpadAmount);
   const isComplete = tracker.stage === "registered";
   const isFailed = tracker.stage === "failed";
   const title =
@@ -802,20 +780,6 @@ function PurchaseStatusPanel({ tracker }: { tracker: PurchaseTracker }) {
               : isComplete
                 ? "QF Allocation Registered"
                 : "Allocation Failed";
-  const description =
-    tracker.stage === "submitted"
-      ? "Your Ethereum transaction is pending."
-      : tracker.stage === "waiting_confirmations"
-        ? "The runner waits for the configured confirmation depth before signing on QF."
-        : tracker.stage === "waiting_runner"
-          ? "Ethereum is confirmed. The runner has not registered the QF allocation yet."
-          : tracker.stage === "registering"
-            ? "The runner is submitting the allocation to the QF vault."
-            : tracker.stage === "status_unavailable"
-              ? tracker.error ?? "The frontend cannot reach the runner status API yet."
-              : isComplete
-                ? "Your allocation is available in the QF claim vault."
-                : tracker.error ?? "The runner reported a failure.";
 
   return (
     <div
@@ -829,16 +793,12 @@ function PurchaseStatusPanel({ tracker }: { tracker: PurchaseTracker }) {
           <p className="mt-1 text-base font-black">{title}</p>
         </div>
         <p className="shrink-0 font-mono text-xs font-black">
-          {Math.min(tracker.confirmations, tracker.confirmationsRequired)}/{tracker.confirmationsRequired}
+          {Math.min(tracker.confirmations, tracker.confirmationsRequired)}/{tracker.confirmationsRequired} confirmations
         </p>
       </div>
-      <p className="mt-2 text-black/70">{description}</p>
-      <div className="mt-3 space-y-1 text-xs font-black uppercase tracking-[0.1em] text-black/60">
-        <p>Tx {shortAddress(tracker.txHash)}</p>
-        {qpadAmount && <p>Allocation {qpadAmount} QPAD</p>}
-        {tracker.qfTxHash && <p>QF Tx {shortAddress(tracker.qfTxHash)}</p>}
-        {tracker.qfAccountSs58 && <p>QF {shortAddress(tracker.qfAccountSs58)}</p>}
-      </div>
+      {(isFailed || tracker.stage === "status_unavailable") && tracker.error && (
+        <p className="mt-2 text-black/70">{tracker.error}</p>
+      )}
     </div>
   );
 }
