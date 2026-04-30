@@ -555,7 +555,6 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
             <AvatarFallback className="font-black">{sale.symbol.slice(0, 2)}</AvatarFallback>
           </Avatar>
           <div>
-            <Badge className="mb-3 hidden bg-[#B8EF53] sm:inline-flex">Ethereum Mainnet Sale</Badge>
             <h1 className="text-3xl font-black uppercase tracking-tight sm:text-4xl">
               {sale.name} ({sale.symbol})
             </h1>
@@ -564,7 +563,7 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
         </div>
         <div className="flex flex-wrap gap-3">
           {!qfMappedRecipient && (
-            <Button type="button" onClick={openQfConnectModal}>
+            <Button type="button" className="lg:hidden" onClick={openQfConnectModal}>
               Connect Wallet
             </Button>
           )}
@@ -619,7 +618,7 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
             <CardContent className="space-y-4">
               <div
                 className={`border-[3px] border-black px-3 py-2 text-xs font-black uppercase tracking-[0.14em] ${
-                  claimsEnabled ? "bg-[#B6F569]" : "bg-[#FFD93D]"
+                  claimsEnabled ? "bg-[#B6F569]" : "bg-[#FFF6BF]"
                 }`}
               >
                 {claimsEnabled
