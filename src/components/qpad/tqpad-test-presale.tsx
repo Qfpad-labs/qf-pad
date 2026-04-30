@@ -594,7 +594,7 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
         <div className="contents lg:block lg:col-span-2 lg:space-y-8">
-          <Card className="order-1">
+          <Card className="order-1 before:hidden">
             <CardHeader>
               <CardTitle>Sale Progress</CardTitle>
             </CardHeader>
@@ -616,7 +616,7 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
             </CardContent>
           </Card>
 
-          <Card className="order-3">
+          <Card className="order-3 before:hidden">
             <CardHeader>
               <CardTitle>Sale Details</CardTitle>
             </CardHeader>
@@ -629,7 +629,7 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
             </CardContent>
           </Card>
 
-          <Card className="order-4">
+          <Card className="order-4 before:hidden">
             <CardHeader>
               <CardTitle>Claim $QPAD on QF</CardTitle>
             </CardHeader>
@@ -667,30 +667,11 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
         </div>
 
         <div className="contents lg:block lg:space-y-6">
-          <Card className="hidden lg:block">
+          <Card className="hidden before:hidden lg:block">
             <CardHeader>
               <CardTitle>Wallets</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2 border-b-[3px] border-black pb-4">
-                <p className="text-xs font-black uppercase tracking-[0.14em]">QF Wallet</p>
-                {connectedQfMappedRecipient ? (
-                  <div className="space-y-1 text-sm font-bold text-black/70">
-                    <p>SS58 {shortAddress(connectedSs58Address)}</p>
-                    <p>Mapped {shortAddress(connectedQfMappedRecipient)}</p>
-                  </div>
-                ) : hasQfRecipient ? (
-                  <div className="space-y-1 text-sm font-bold text-black/70">
-                    <p>SS58 {shortAddress(activeQfSs58Address)}</p>
-                    <p>Mapped {shortAddress(qfMappedRecipient)}</p>
-                  </div>
-                ) : (
-                  <Button type="button" className="mt-3 w-full" onClick={openQfConnectModal}>
-                    Connect QF Wallet
-                  </Button>
-                )}
-              </div>
-
               <div className="space-y-2">
                 <p className="text-xs font-black uppercase tracking-[0.14em]">Ethereum Wallet</p>
                 {ethAccount ? (
@@ -712,7 +693,7 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
             </CardContent>
           </Card>
 
-          <Card className="order-2">
+          <Card className="order-2 before:hidden">
             <CardHeader>
               <CardTitle>Contribute</CardTitle>
             </CardHeader>

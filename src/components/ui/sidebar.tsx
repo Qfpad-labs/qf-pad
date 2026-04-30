@@ -261,7 +261,7 @@ const SidebarContent = () => {
               type="button"
               className={`${actionButtonClass} hidden bg-[#B8EF53] text-black lg:block`}
             >
-              Connect Wallet
+              Connect QF Wallet
             </button>
           )}
         </div>
