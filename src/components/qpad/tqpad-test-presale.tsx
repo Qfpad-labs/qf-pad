@@ -40,12 +40,17 @@ import {
   useWriteContract as useQfWriteContract,
 } from "@/lib/papi/hooks";
 import { getFriendlyTxErrorMessage } from "@/lib/utils/tx-errors";
+import {
+  fetchQpadPurchaseStatus,
+  type QpadPurchaseStatusResponse,
+} from "@/lib/qpad/purchase-status";
 
 const SEPOLIA_RPC_URL = "https://ethereum-sepolia-rpc.publicnode.com";
 const SEPOLIA_EXPLORER_URL = "https://sepolia.etherscan.io";
 const USDC_DECIMALS = 6;
 const QPAD_DECIMALS = 18;
 const USDC_UNIT = 1_000_000n;
+const CONFIRMATIONS_REQUIRED = 6;
 
 const sepoliaClient = createPublicClient({
   chain: sepolia,
@@ -91,6 +96,27 @@ interface QfReadCall {
   address: Address;
   functionName: string;
   args?: unknown[];
+}
+
+type PurchaseTrackerStage =
+  | "submitted"
+  | "waiting_confirmations"
+  | "waiting_runner"
+  | "registering"
+  | "registered"
+  | "failed"
+  | "status_unavailable";
+
+interface PurchaseTracker {
+  txHash: Hex;
+  stage: PurchaseTrackerStage;
+  confirmations: number;
+  confirmationsRequired: number;
+  qpadAmount?: string;
+  qfTxHash?: Hex | null;
+  qfAccountSs58?: string | null;
+  qfMappedRecipient?: Address;
+  error?: string | null;
 }
 
 const emptySaleState: SaleState = {
@@ -156,6 +182,21 @@ function getInputError(amountRaw: bigint, sale: SaleState) {
   return null;
 }
 
+function getTrackerStage(status: QpadPurchaseStatusResponse["status"], found: boolean): PurchaseTrackerStage {
+  if (!found || status === "pending_confirmation") return "waiting_runner";
+  if (status === "registered") return "registered";
+  if (status === "failed") return "failed";
+  if (status === "registering") return "registering";
+  return "waiting_runner";
+}
+
+function formatStatusQpadAmount(amount: string | undefined) {
+  if (!amount) return undefined;
+  const value = Number(amount);
+  if (!Number.isFinite(value)) return amount;
+  return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
 export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
   const { address: qfMappedRecipient, ss58Address } = useQfAccount();
   const { openConnectModal: openQfConnectModal } = useQfConnectModal();
@@ -174,6 +215,7 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
   const [isApproving, setIsApproving] = useState(false);
   const [isBuying, setIsBuying] = useState(false);
   const [lastEthTxHash, setLastEthTxHash] = useState<Hex | undefined>();
+  const [trackedPurchase, setTrackedPurchase] = useState<PurchaseTracker | null>(null);
 
   const qfAccountId32 = useMemo(() => toQfAccountId32(ss58Address), [ss58Address]);
   const amountRaw = useMemo(() => getAmountRaw(amount), [amount]);
@@ -264,6 +306,120 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
     return () => window.clearInterval(timer);
   }, []);
 
+  const refreshPurchaseTracking = useCallback(async (txHash: Hex) => {
+    const currentBlock = await sepoliaClient.getBlockNumber();
+
+    try {
+      let receipt: Awaited<ReturnType<typeof sepoliaClient.getTransactionReceipt>>;
+      try {
+        receipt = await sepoliaClient.getTransactionReceipt({ hash: txHash });
+      } catch (receiptError) {
+        const message = receiptError instanceof Error ? receiptError.message : String(receiptError);
+        if (message.toLowerCase().includes("not found")) {
+          setTrackedPurchase((previous) => previous?.txHash === txHash
+            ? {
+                ...previous,
+                stage: "submitted",
+                confirmations: 0,
+                error: null,
+              }
+            : previous);
+          return;
+        }
+        throw receiptError;
+      }
+
+      const confirmations = receipt.blockNumber
+        ? Math.max(Number(currentBlock - receipt.blockNumber + 1n), 0)
+        : 0;
+
+      if (receipt.status !== "success") {
+        setTrackedPurchase((previous) => previous?.txHash === txHash
+          ? {
+              ...previous,
+              stage: "failed",
+              confirmations,
+              error: "Sepolia transaction reverted.",
+            }
+          : previous);
+        return;
+      }
+
+      if (confirmations < CONFIRMATIONS_REQUIRED) {
+        setTrackedPurchase((previous) => previous?.txHash === txHash
+          ? {
+              ...previous,
+              stage: "waiting_confirmations",
+              confirmations,
+              confirmationsRequired: CONFIRMATIONS_REQUIRED,
+              error: null,
+            }
+          : previous);
+        return;
+      }
+
+      const status = await fetchQpadPurchaseStatus({
+        txHash,
+        chainId: sepolia.id,
+        presaleAddress: sale.presaleAddress,
+      });
+      const stage = getTrackerStage(status.status, status.found);
+      const shouldToastRegistered =
+        trackedPurchase?.txHash === txHash &&
+        trackedPurchase.stage !== "registered" &&
+        stage === "registered";
+
+      setTrackedPurchase((previous) => previous?.txHash === txHash
+        ? {
+            ...previous,
+            stage,
+            confirmations: status.confirmations ?? confirmations,
+            confirmationsRequired: status.confirmationsRequired,
+            qpadAmount: status.qpadAmount,
+            qfTxHash: status.qfTxHash,
+            qfAccountSs58: status.qfAccountSs58,
+            qfMappedRecipient: status.qfMappedRecipient,
+            error: status.error,
+          }
+        : previous);
+
+      if (shouldToastRegistered) {
+        const qpadAmount = formatStatusQpadAmount(status.qpadAmount);
+        toast.success(qpadAmount ? `QF allocation registered: ${qpadAmount} TQPAD` : "QF allocation registered.");
+        await refetchQfState();
+        await refreshSaleState(ethAccount);
+      }
+    } catch (error) {
+      console.error("Purchase tracking failed", error);
+      setTrackedPurchase((previous) => previous?.txHash === txHash
+        ? {
+            ...previous,
+            stage: "status_unavailable",
+            error: "Runner status is temporarily unavailable.",
+          }
+        : previous);
+    }
+  }, [ethAccount, refetchQfState, refreshSaleState, sale.presaleAddress, trackedPurchase?.stage, trackedPurchase?.txHash]);
+
+  useEffect(() => {
+    if (!trackedPurchase || trackedPurchase.stage === "registered" || trackedPurchase.stage === "failed") return;
+
+    let cancelled = false;
+    const poll = async () => {
+      if (!cancelled) {
+        await refreshPurchaseTracking(trackedPurchase.txHash);
+      }
+    };
+
+    void poll();
+    const timer = window.setInterval(() => void poll(), 6_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [refreshPurchaseTracking, trackedPurchase]);
+
   const connectEthereumWallet = useCallback(async () => {
     if (!openEvmConnectModal) {
       toast.error("Ethereum wallet connector unavailable.");
@@ -346,8 +502,14 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
         args: [amountRaw, qfAccountId32, qfMappedRecipient, nonce],
       });
       setLastEthTxHash(hash);
+      setTrackedPurchase({
+        txHash: hash,
+        stage: "submitted",
+        confirmations: 0,
+        confirmationsRequired: CONFIRMATIONS_REQUIRED,
+      });
       await sepoliaClient.waitForTransactionReceipt({ hash });
-      toast.success("TQPAD purchase confirmed on Sepolia.");
+      toast.success("TQPAD purchase confirmed on Sepolia. Waiting for QF allocation.");
       setAmount("");
       await refreshSaleState(ethAccount);
       await refetchQfState();
@@ -585,6 +747,7 @@ export function TqpadTestPresale({ sale }: { sale: QpadExternalSaleConfig }) {
               {!qfMappedRecipient && (
                 <p className="text-sm font-bold text-black/65">Connect a QF wallet before contributing.</p>
               )}
+              {trackedPurchase && <PurchaseStatusPanel tracker={trackedPurchase} />}
               {lastEthTxHash && (
                 <a
                   href={`${SEPOLIA_EXPLORER_URL}/tx/${lastEthTxHash}`}
@@ -617,6 +780,65 @@ function DetailRow({ label, value, compact = false }: { label: string; value: st
     <div className={`flex items-start justify-between gap-4 ${compact ? "py-2" : "py-3"}`}>
       <p className="text-xs font-black uppercase tracking-[0.14em] text-black/55">{label}</p>
       <p className="max-w-[60%] break-words text-right text-sm font-black leading-tight">{value}</p>
+    </div>
+  );
+}
+
+function PurchaseStatusPanel({ tracker }: { tracker: PurchaseTracker }) {
+  const qpadAmount = formatStatusQpadAmount(tracker.qpadAmount);
+  const isComplete = tracker.stage === "registered";
+  const isFailed = tracker.stage === "failed";
+  const title =
+    tracker.stage === "submitted"
+      ? "Purchase Submitted"
+      : tracker.stage === "waiting_confirmations"
+        ? "Waiting For Confirmations"
+        : tracker.stage === "waiting_runner"
+          ? "Waiting For QF Allocation"
+          : tracker.stage === "registering"
+            ? "Registering On QF"
+            : tracker.stage === "status_unavailable"
+              ? "Checking Runner Status"
+              : isComplete
+                ? "QF Allocation Registered"
+                : "Allocation Failed";
+  const description =
+    tracker.stage === "submitted"
+      ? "Your Sepolia transaction is pending."
+      : tracker.stage === "waiting_confirmations"
+        ? "The runner waits for the configured confirmation depth before signing on QF."
+        : tracker.stage === "waiting_runner"
+          ? "Sepolia is confirmed. The runner has not registered the QF allocation yet."
+          : tracker.stage === "registering"
+            ? "The runner is submitting the allocation to the QF vault."
+            : tracker.stage === "status_unavailable"
+              ? tracker.error ?? "The frontend cannot reach the runner status API yet."
+              : isComplete
+                ? "Your allocation is available in the QF claim vault."
+                : tracker.error ?? "The runner reported a failure.";
+
+  return (
+    <div
+      className={`border-[3px] border-black px-4 py-3 text-sm font-bold ${
+        isComplete ? "bg-[#B6F569]" : isFailed ? "bg-[#FFD0D0]" : "bg-[#FFF6BF]"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.14em] text-black/60">Runner Status</p>
+          <p className="mt-1 text-base font-black">{title}</p>
+        </div>
+        <p className="shrink-0 font-mono text-xs font-black">
+          {Math.min(tracker.confirmations, tracker.confirmationsRequired)}/{tracker.confirmationsRequired}
+        </p>
+      </div>
+      <p className="mt-2 text-black/70">{description}</p>
+      <div className="mt-3 space-y-1 text-xs font-black uppercase tracking-[0.1em] text-black/60">
+        <p>Tx {shortAddress(tracker.txHash)}</p>
+        {qpadAmount && <p>Allocation {qpadAmount} TQPAD</p>}
+        {tracker.qfTxHash && <p>QF Tx {shortAddress(tracker.qfTxHash)}</p>}
+        {tracker.qfAccountSs58 && <p>QF {shortAddress(tracker.qfAccountSs58)}</p>}
+      </div>
     </div>
   );
 }
