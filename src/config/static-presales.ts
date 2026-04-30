@@ -15,6 +15,12 @@ const QPAD_HARD_CAP = parseUnits("40000", 6);
 const QPAD_MIN_CONTRIBUTION = parseUnits("50", 6);
 const QPAD_MAX_CONTRIBUTION = parseUnits("1600", 6);
 
+export interface QpadStaticPresaleState {
+  isSaleOpen?: boolean;
+  totalRaised?: bigint;
+  totalQpadSold?: bigint;
+}
+
 export interface QpadExternalSaleConfig {
   id: Address;
   presaleAddress: Address;
@@ -53,14 +59,22 @@ export const QPAD_MAINNET_SALE: QpadExternalSaleConfig = {
   maxLabel: "$1,600",
 };
 
-export function getQpadStaticPresale(nowMs: number): PresaleWithStatus {
+export function getQpadStaticPresale(nowMs: number, saleState?: QpadStaticPresaleState): PresaleWithStatus {
   const now = BigInt(Math.floor(nowMs / 1000));
   const status =
     now < QPAD_START_TIME
       ? "upcoming"
       : now > QPAD_END_TIME
         ? "ended"
-        : "live";
+        : saleState?.isSaleOpen === false
+          ? "ended"
+          : "live";
+  const totalRaised = saleState?.totalRaised ?? 0n;
+  const totalQpadSold = saleState?.totalQpadSold ?? 0n;
+  const progress =
+    QPAD_HARD_CAP > 0n
+      ? Math.min(Number((totalRaised * 10000n) / QPAD_HARD_CAP) / 100, 100)
+      : 0;
 
   return {
     address: QPAD_ETH_MAINNET_PRESALE_ADDRESS,
@@ -75,8 +89,8 @@ export function getQpadStaticPresale(nowMs: number): PresaleWithStatus {
     hardCap: QPAD_HARD_CAP,
     minContribution: QPAD_MIN_CONTRIBUTION,
     maxContribution: QPAD_MAX_CONTRIBUTION,
-    totalRaised: 0n,
-    committedTokens: 0n,
+    totalRaised,
+    committedTokens: totalQpadSold,
     totalTokensDeposited: QPAD_SALE_AMOUNT,
     claimEnabled: false,
     refundsEnabled: false,
@@ -97,12 +111,12 @@ export function getQpadStaticPresale(nowMs: number): PresaleWithStatus {
       discord: "",
     },
     status,
-    progress: 0,
+    progress,
   };
 }
 
-export function getQpadStaticPresales(nowMs: number): PresaleWithStatus[] {
-  return [getQpadStaticPresale(nowMs)];
+export function getQpadStaticPresales(nowMs: number, saleState?: QpadStaticPresaleState): PresaleWithStatus[] {
+  return [getQpadStaticPresale(nowMs, saleState)];
 }
 
 export function getQpadExternalSaleById(id: string | undefined): QpadExternalSaleConfig | undefined {

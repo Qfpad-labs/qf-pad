@@ -3,10 +3,28 @@
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { createPublicClient, http, parseAbi } from "viem";
+import { mainnet } from "viem/chains";
 import { PresaleCard } from "@/components/ui/presale-card";
 import { useLaunchpadPresales } from "@/lib/hooks/useLaunchpadPresales";
 import type { LaunchpadPresaleFilter } from "@/lib/hooks/useLaunchpadPresales";
-import { getQpadStaticPresales } from "@/config/static-presales";
+import {
+  getQpadStaticPresales,
+  QPAD_ETH_MAINNET_PRESALE_ADDRESS,
+  type QpadStaticPresaleState,
+} from "@/config/static-presales";
+
+const ETH_MAINNET_RPC_URL =
+  import.meta.env.VITE_ETH_MAINNET_RPC_URL || "https://ethereum-rpc.publicnode.com";
+const qpadCardClient = createPublicClient({
+  chain: mainnet,
+  transport: http(ETH_MAINNET_RPC_URL),
+});
+const qpadPresaleCardAbi = parseAbi([
+  "function isSaleOpen() view returns (bool)",
+  "function totalRaised() view returns (uint256)",
+  "function totalQpadSold() view returns (uint256)",
+]);
 
 const filterOptions: Array<{ label: string; value: LaunchpadPresaleFilter; color: string }> = [
   { label: "All", value: "all", color: "bg-[#42C9FF]" },
@@ -31,6 +49,7 @@ export default function ProjectsPage() {
   const [activeFilter, setActiveFilter] = useState<LaunchpadPresaleFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [qpadSaleState, setQpadSaleState] = useState<QpadStaticPresaleState>();
   const { presales, isLoading } = useLaunchpadPresales("all");
 
   useEffect(() => {
@@ -38,7 +57,47 @@ export default function ProjectsPage() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const staticPresales = useMemo(() => getQpadStaticPresales(nowMs), [nowMs]);
+  useEffect(() => {
+    let cancelled = false;
+
+    const refreshQpadCardState = async () => {
+      try {
+        const [isSaleOpen, totalRaised, totalQpadSold] = await Promise.all([
+          qpadCardClient.readContract({
+            address: QPAD_ETH_MAINNET_PRESALE_ADDRESS,
+            abi: qpadPresaleCardAbi,
+            functionName: "isSaleOpen",
+          }),
+          qpadCardClient.readContract({
+            address: QPAD_ETH_MAINNET_PRESALE_ADDRESS,
+            abi: qpadPresaleCardAbi,
+            functionName: "totalRaised",
+          }),
+          qpadCardClient.readContract({
+            address: QPAD_ETH_MAINNET_PRESALE_ADDRESS,
+            abi: qpadPresaleCardAbi,
+            functionName: "totalQpadSold",
+          }),
+        ]);
+
+        if (!cancelled) {
+          setQpadSaleState({ isSaleOpen, totalRaised, totalQpadSold });
+        }
+      } catch (error) {
+        console.error("Unable to refresh QPAD project card state", error);
+      }
+    };
+
+    void refreshQpadCardState();
+    const timer = window.setInterval(() => void refreshQpadCardState(), 15_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  const staticPresales = useMemo(() => getQpadStaticPresales(nowMs, qpadSaleState), [nowMs, qpadSaleState]);
   const allPresales = useMemo(() => {
     const staticAddresses = new Set(staticPresales.map((presale) => presale.address.toLowerCase()));
     return [
