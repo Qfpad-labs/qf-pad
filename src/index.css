@@ -140,7 +140,7 @@ body {
   }
 
   .animate-fiesta-banner-in {
-    animation: fiestaBannerIn 0.42s cubic-bezier(0.2, 0.9, 0.2, 1) forwards;
+    animation: fiestaBannerIn 0.62s cubic-bezier(0.2, 0.9, 0.2, 1) forwards;
     transform-origin: center center;
     will-change: transform, opacity;
   }
@@ -192,11 +192,21 @@ body {
 }
 
 @keyframes fiestaBannerIn {
-  from {
+  0% {
     opacity: 0;
-    transform: translateY(22px) scale(0.96);
+    transform: translateY(-56px) scale(0.9);
   }
-  to {
+  56% {
+    opacity: 1;
+    transform: translateY(10px) scale(1.02);
+  }
+  74% {
+    transform: translateY(-4px) scale(0.995);
+  }
+  88% {
+    transform: translateY(1px) scale(1.005);
+  }
+  100% {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
