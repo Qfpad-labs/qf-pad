@@ -4,7 +4,6 @@ export const QF_CHAIN_ID = 3426;
 export const QF_RPC_URL = "https://archive.mainnet.qfnode.net/eth";
 export const QF_WS_RPC_URL = "wss://mainnet.qfnode.net";
 export const QF_EXPLORER_URL = "https://portal.qfnetwork.xyz/?rpc=wss%3A%2F%2Fmainnet.qfnode.net#/explorer";
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
 
 export const SUPPORTED_CHAIN_IDS = [QF_CHAIN_ID] as number[];
 export const CHAIN_LABELS: Record<number, string> = {
@@ -34,7 +33,7 @@ export const NFT_FACTORY_LENS_BY_CHAIN: Record<number, Address> = {
 };
 
 export const STAKING_CONTRACT_ADDRESSES_BY_CHAIN: Record<number, Address> = {
-    [QF_CHAIN_ID]: ZERO_ADDRESS,
+    [QF_CHAIN_ID]: "0x5237bca1369e0f63ff14b08d28f71fc41c3645c9" as Address,
 };
 
 export const getStakingContractAddress = (chainId?: number) => {

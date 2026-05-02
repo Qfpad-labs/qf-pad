@@ -20,7 +20,6 @@ import {
 import {
   useAccount,
   useChainId,
-  usePublicClient,
   useReadContract,
   useWaitForTransactionReceipt,
   useWriteContract,
@@ -30,7 +29,6 @@ export default function StakingPage() {
   const { openConnectModal } = useConnectModal();
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
-  const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
   const stakingContractAddress = getStakingContractAddress(chainId);
 
@@ -85,13 +83,6 @@ export default function StakingPage() {
   });
 
   // Read rewards token info
-  const { data: rewardsTokenSymbol } = useReadContract({
-    abi: erc20Abi,
-    address: rewardsTokenAddress as Address,
-    functionName: "symbol",
-    query: { enabled: !!rewardsTokenAddress },
-  });
-
   const { data: rewardsTokenDecimals } = useReadContract({
     abi: erc20Abi,
     address: rewardsTokenAddress as Address,
@@ -148,6 +139,27 @@ export default function StakingPage() {
     },
   });
 
+  const { data: stakingStatus } = useReadContract({
+    address: stakingContractAddress,
+    abi: StakingContract.abi as Abi,
+    functionName: "stakingStatus",
+  });
+
+  const { data: finishAt } = useReadContract({
+    address: stakingContractAddress,
+    abi: StakingContract.abi as Abi,
+    functionName: "finishAt",
+    query: {
+      refetchInterval: 5000,
+    },
+  });
+
+  const { data: rewardRate } = useReadContract({
+    address: stakingContractAddress,
+    abi: StakingContract.abi as Abi,
+    functionName: "rewardRate",
+  });
+
   // Transaction receipts
   const { isSuccess: isStakingSuccess, isError: isStakingError } =
     useWaitForTransactionReceipt({ hash: stakingHash });
@@ -164,7 +176,8 @@ export default function StakingPage() {
   const stakingTokenDisplaySymbol =
     typeof stakingTokenSymbol === "string" && stakingTokenSymbol.trim().length > 0
       ? stakingTokenSymbol
-      : "QFPAD";
+      : "QPAD";
+  const qpadTickerLabel = "$QPAD";
 
   const formattedWalletBalance = useMemo(() => {
     if (walletBalance === undefined || walletBalance === null) return "0";
@@ -251,6 +264,27 @@ export default function StakingPage() {
     () => animatedPendingRewards.toLocaleString(undefined, { maximumFractionDigits: 6 }),
     [animatedPendingRewards]
   );
+
+  const isStakingActive = stakingStatus === true;
+
+  const approximateApy = useMemo(() => {
+    if (rewardRate === undefined || rewardRate === null) return null;
+    try {
+      const yearlyRate = (Number(rewardRate as bigint) * 31536000) / 1e18;
+      return Number.isFinite(yearlyRate) ? yearlyRate * 100 : null;
+    } catch {
+      return null;
+    }
+  }, [rewardRate]);
+
+  const stakingEndText = useMemo(() => {
+    if (!finishAt || finishAt === 0n) return null;
+    try {
+      return new Date(Number(finishAt) * 1000).toLocaleString();
+    } catch {
+      return null;
+    }
+  }, [finishAt]);
 
   // Check if approval is needed
   const needsApproval = useMemo(() => {
@@ -363,9 +397,8 @@ export default function StakingPage() {
         toast.error("Enter an amount greater than 0.");
         return;
       }
-
-      if (!publicClient) {
-        toast.error("Could not access network client. Please retry.");
+      if (!isStakingActive) {
+        toast.error("Staking has not started yet.");
         return;
       }
 
@@ -375,20 +408,12 @@ export default function StakingPage() {
         setIsApproving(true);
         toast.info(`Approving ${stakingTokenDisplaySymbol}...`);
 
-        const approvalTxHash = await writeContractAsync({
+        await writeContractAsync({
           address: stakingTokenAddress as Address,
           abi: erc20Abi,
           functionName: "approve",
           args: [stakingContractAddress, amount],
         });
-
-        const approvalReceipt = await publicClient.waitForTransactionReceipt({
-          hash: approvalTxHash as `0x${string}`,
-        });
-
-        if (approvalReceipt.status !== "success") {
-          throw new Error("Approval transaction failed.");
-        }
 
         await refetchAllowance();
         setIsApproving(false);
@@ -410,6 +435,7 @@ export default function StakingPage() {
       setIsApproving(false);
       setIsStaking(false);
       const message = (err as { shortMessage?: string })?.shortMessage || "Staking failed";
+      console.error("Staking action failed", err);
       toast.error(message);
     }
   };
@@ -433,6 +459,7 @@ export default function StakingPage() {
     } catch (err: unknown) {
       setIsUnstaking(false);
       const message = (err as { shortMessage?: string })?.shortMessage || "Withdrawal failed";
+      console.error("Unstaking action failed", err);
       toast.error(message);
     }
   };
@@ -455,6 +482,7 @@ export default function StakingPage() {
     } catch (err: unknown) {
       setIsClaiming(false);
       const message = (err as { shortMessage?: string })?.shortMessage || "Claim failed";
+      console.error("Claim action failed", err);
       toast.error(message);
     }
   };
@@ -484,12 +512,14 @@ export default function StakingPage() {
                 </h1>
               </div>
               <p className="mt-4 max-w-3xl text-base sm:text-lg font-bold text-black/80">
-                Stake {stakingTokenDisplaySymbol} and earn {rewardsTokenSymbol || "rewards"} from a cleaner,
-                faster staking panel.
+                Put your {qpadTickerLabel} to work, stake {qpadTickerLabel} and earn even more {qpadTickerLabel}!
+              </p>
+              <p className="mt-2 max-w-2xl text-sm font-bold text-black/60 sm:text-base">
+                A simple rewards pool built for early {qpadTickerLabel} holders.
               </p>
             </div>
-            <div className="inline-flex rotate-[0.6deg] self-start border-[3px] border-black bg-[#B8EF53] px-4 py-2 text-xs font-black uppercase tracking-[0.14em]">
-              Live Rewards
+            <div className="inline-flex animate-pulse rotate-[0.6deg] self-start border-[3px] border-black bg-[#B8EF53] px-4 py-2 text-xs font-black uppercase tracking-[0.14em]">
+              Staking Soon
             </div>
           </div>
         </div>
@@ -520,22 +550,24 @@ export default function StakingPage() {
               <CardHeader className="border-b-2 border-black bg-[#F5CF85] p-4">
                 <CardTitle className="font-black uppercase tracking-wider flex items-center gap-2">
                   <Wallet className="w-5 h-5" />
-                  Your Position
+                  Your QPAD Position
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-4 sm:p-6 space-y-4">
                 <div className="p-4 border-2 border-black bg-[#EAF7FF]">
-                  <p className="text-xs uppercase font-bold text-gray-500">Wallet Balance</p>
+                  <p className="text-xs uppercase font-bold text-gray-500">Available {qpadTickerLabel}</p>
                   <p className="text-2xl font-black text-gray-900">{formattedWalletBalance}</p>
-                  <p className="text-sm text-gray-500">{stakingTokenDisplaySymbol}</p>
+                  <p className="text-sm text-gray-500">{qpadTickerLabel}</p>
                 </div>
                 <div className="p-4 border-2 border-black bg-[#FFF6E5]">
-                  <p className="text-xs uppercase font-bold text-gray-500">Staked Balance</p>
+                  <p className="text-xs uppercase font-bold text-gray-500">Staked {qpadTickerLabel}</p>
                   <p className="text-2xl font-black text-gray-900">{formattedStakedBalance}</p>
-                  <p className="text-sm text-gray-500">{stakingTokenDisplaySymbol}</p>
+                  <p className="text-sm text-gray-500">{qpadTickerLabel}</p>
                 </div>
                 <div className="p-4 border-2 border-black bg-[#ECF9E9]">
-                  <p className="text-xs uppercase font-bold text-gray-500">Pending Rewards</p>
+                  <p className="text-xs uppercase font-bold text-gray-500">
+                    {isStakingActive ? "Rewards Ready" : "Rewards Earned"}
+                  </p>
                   <p
                     className={`text-2xl font-black transition-all duration-700 ${isPendingRewardsAnimating
                       ? "text-emerald-700 scale-[1.03] animate-pulse"
@@ -544,7 +576,7 @@ export default function StakingPage() {
                   >
                     {formattedPendingRewards}
                   </p>
-                  <p className="text-sm text-gray-500">{rewardsTokenSymbol || "Tokens"}</p>
+                  <p className="text-sm text-gray-500">{qpadTickerLabel}</p>
                 </div>
               </CardContent>
             </Card>
@@ -566,7 +598,7 @@ export default function StakingPage() {
                     ) : (
                       <>
                         <Gift className="w-5 h-5 mr-2" />
-                        Claim {formattedPendingRewards} {rewardsTokenSymbol}
+                        Claim {formattedPendingRewards} {qpadTickerLabel}
                       </>
                     )}
                   </Button>
@@ -581,9 +613,24 @@ export default function StakingPage() {
               <CardContent className="p-4 sm:p-6 bg-[#FFF8EC]">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-xs uppercase font-bold text-gray-500">Total Staked</p>
+                    <p className="text-xs uppercase font-bold text-gray-500">Community Stake</p>
                     <p className="text-3xl sm:text-4xl font-black text-gray-900">{formattedTotalStaked}</p>
-                    <p className="text-sm text-gray-500">{stakingTokenDisplaySymbol}</p>
+                    <p className="text-sm text-gray-500">{qpadTickerLabel}</p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-black uppercase tracking-[0.12em]">
+                      <span className={`border-[2px] border-black px-2 py-1 ${isStakingActive ? "bg-[#B8EF53]" : "bg-[#FFD9BE]"}`}>
+                        {isStakingActive ? "Staking Live" : "Opening Soon"}
+                      </span>
+                      {approximateApy !== null && (
+                        <span className="border-[2px] border-black bg-white px-2 py-1">
+                          EST. {approximateApy.toFixed(0)}% APY
+                        </span>
+                      )}
+                    </div>
+                    {stakingEndText && (
+                      <p className="mt-2 text-xs font-bold text-gray-500">
+                        Ends: {stakingEndText}
+                      </p>
+                    )}
                   </div>
                   <span className="inline-flex h-11 w-11 items-center justify-center border-[3px] border-black bg-[#B8EF53]">
                     <BarChart3 className="w-6 h-6 text-black shrink-0" />
@@ -618,9 +665,14 @@ export default function StakingPage() {
               <CardContent className="p-4 sm:p-6">
                 {activeTab === "stake" ? (
                   <div className="space-y-4">
+                    {!isStakingActive && (
+                      <div className="border-[2px] border-black bg-[#FFF2D5] px-4 py-3 text-sm font-bold text-black">
+                        The staking pool is almost live. Prepare your {qpadTickerLabel}.
+                      </div>
+                    )}
                     <div>
                       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                        <label className="text-xs font-black uppercase tracking-[0.14em]">Amount to Stake</label>
+                        <label className="text-xs font-black uppercase tracking-[0.14em]">QPAD to Stake</label>
                         <div className="inline-flex items-center gap-2 border-[2px] border-black bg-[#FFF2D5] px-2 py-1 text-[11px] font-black uppercase tracking-[0.12em]">
                           <span className="text-black/60">Balance</span>
                           <span className="font-mono text-black">{formattedWalletBalance}</span>
@@ -644,10 +696,10 @@ export default function StakingPage() {
                             className="min-w-0 flex-1 border-0 bg-transparent p-0 text-xl font-black text-black placeholder:text-black/40 outline-none ring-0 focus:outline-none focus:ring-0 sm:text-2xl"
                           />
                           <span
-                            title={stakingTokenDisplaySymbol}
+                            title={qpadTickerLabel}
                             className="max-w-[7rem] shrink-0 truncate border-[2px] border-black bg-[#FFE38A] px-2 py-1 text-[10px] font-black uppercase leading-none tracking-[0.12em] sm:max-w-[9rem] sm:px-3 sm:text-xs"
                           >
-                            {stakingTokenDisplaySymbol}
+                            {qpadTickerLabel}
                           </span>
                         </div>
                       </div>
@@ -658,11 +710,13 @@ export default function StakingPage() {
 
                     <Button
                       onClick={handleStake}
-                      disabled={isApproving || isStaking || !stakeAmount || hasInsufficientStakeBalance}
+                      disabled={isApproving || isStaking || !stakeAmount || hasInsufficientStakeBalance || !isStakingActive}
                       className={`-rotate-[0.25deg] w-full py-6 text-black font-black uppercase tracking-wider border-4 border-black shadow-[4px_4px_0_rgba(0,0,0,1)] hover:shadow-[6px_6px_0_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all disabled:opacity-50 ${needsApproval ? "bg-[#FFE38A] hover:bg-[#FFDA73]" : "bg-[#B8EF53] hover:bg-[#A6DD4A]"
                         }`}
                     >
-                      {isApproving ? (
+                      {!isStakingActive ? (
+                        "Get Ready to Stake"
+                      ) : isApproving ? (
                         <>
                           <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                           Approving...
@@ -673,7 +727,7 @@ export default function StakingPage() {
                           Staking...
                         </>
                       ) : needsApproval ? (
-                        `Approve + Stake ${stakingTokenDisplaySymbol}`
+                        `Approve + Stake ${qpadTickerLabel}`
                       ) : (
                         "Stake"
                       )}
@@ -712,10 +766,10 @@ export default function StakingPage() {
                             className="min-w-0 flex-1 border-0 bg-transparent p-0 text-xl font-black text-black placeholder:text-black/40 outline-none ring-0 focus:outline-none focus:ring-0 sm:text-2xl"
                           />
                           <span
-                            title={stakingTokenDisplaySymbol}
+                            title={qpadTickerLabel}
                             className="max-w-[7rem] shrink-0 truncate border-[2px] border-black bg-[#FFD9BE] px-2 py-1 text-[10px] font-black uppercase leading-none tracking-[0.12em] sm:max-w-[9rem] sm:px-3 sm:text-xs"
                           >
-                            {stakingTokenDisplaySymbol}
+                            {qpadTickerLabel}
                           </span>
                         </div>
                       </div>
