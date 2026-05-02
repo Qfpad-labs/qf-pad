@@ -543,10 +543,10 @@ export default function StakingPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* User Stats */}
-          <div className="lg:col-span-1 space-y-4">
-            <Card className="before:hidden rotate-[0.3deg] py-0 border-4 border-black shadow-[4px_4px_0_rgba(0,0,0,1)] p-0 gap-0">
+          <div className="contents lg:block lg:col-span-1 lg:space-y-4">
+            <Card className="order-3 before:hidden rotate-[0.3deg] py-0 border-4 border-black shadow-[4px_4px_0_rgba(0,0,0,1)] p-0 gap-0">
               <CardHeader className="border-b-2 border-black bg-[#F5CF85] p-4">
                 <CardTitle className="font-black uppercase tracking-wider flex items-center gap-2">
                   <Wallet className="w-5 h-5" />
@@ -583,7 +583,7 @@ export default function StakingPage() {
 
             {/* Claim Rewards */}
             {hasClaimableRewards && (
-              <Card className="before:hidden -rotate-[0.25deg] py-0 border-4 border-black shadow-[4px_4px_0_rgba(0,0,0,1)] p-0 gap-0 overflow-hidden">
+              <Card className="order-4 before:hidden -rotate-[0.25deg] py-0 border-4 border-black shadow-[4px_4px_0_rgba(0,0,0,1)] p-0 gap-0 overflow-hidden">
                 <CardContent className="p-0">
                   <Button
                     onClick={handleClaim}
@@ -608,8 +608,8 @@ export default function StakingPage() {
           </div>
 
           {/* Stake/Unstake Form */}
-          <div className="lg:col-span-2 space-y-4">
-            <Card className="before:hidden -rotate-[0.25deg] py-0 border-4 border-black shadow-[4px_4px_0_rgba(0,0,0,1)] p-0 gap-0">
+          <div className="contents lg:block lg:col-span-2 lg:space-y-4">
+            <Card className="order-1 before:hidden -rotate-[0.25deg] py-0 border-4 border-black shadow-[4px_4px_0_rgba(0,0,0,1)] p-0 gap-0">
               <CardContent className="p-4 sm:p-6 bg-[#FFF8EC]">
                 <div className="flex items-start justify-between gap-4">
                   <div>
@@ -639,7 +639,7 @@ export default function StakingPage() {
               </CardContent>
             </Card>
 
-            <Card className="before:hidden rotate-[0.3deg] py-0 border-4 border-black shadow-[4px_4px_0_rgba(0,0,0,1)] p-0 gap-0">
+            <Card className="order-2 before:hidden rotate-[0.3deg] py-0 border-4 border-black shadow-[4px_4px_0_rgba(0,0,0,1)] p-0 gap-0">
               <CardHeader className="border-b-2 border-black bg-[#FFF2D5] p-0">
                 <div className="flex">
                   <button

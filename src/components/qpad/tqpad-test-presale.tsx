@@ -1,5 +1,6 @@
 "use client";
 
+import confetti from "canvas-confetti";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AccountId } from "@polkadot-api/substrate-bindings";
 import {
@@ -26,12 +27,14 @@ import {
   useSwitchChain,
   useWriteContract as useEvmWriteContract,
 } from "wagmi";
+import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import qpadFiestaBanner from "@/assets/QPAD fiesta.png";
 import type { QpadExternalSaleConfig } from "@/config/static-presales";
 import {
   useAccount as useQfAccount,
@@ -216,6 +219,7 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
   const [isApproving, setIsApproving] = useState(false);
   const [isBuying, setIsBuying] = useState(false);
   const [trackedPurchase, setTrackedPurchase] = useState<PurchaseTracker | null>(null);
+  const [isFiestaOpen, setIsFiestaOpen] = useState(false);
 
   const manualQfAddressTrimmed = manualQfAddress.trim();
   const manualQfRecipient = useMemo(
@@ -311,6 +315,49 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
     const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setIsFiestaOpen(true), 250);
+    return () => window.clearTimeout(timeout);
+  }, []);
+
+  useEffect(() => {
+    if (!isFiestaOpen) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const timeout = window.setTimeout(() => {
+      const colors = ["#B8EF53", "#42C9FF", "#FF7F41", "#F95D9B", "#FFFFFF"];
+      void confetti({
+        particleCount: 80,
+        angle: 60,
+        spread: 65,
+        origin: { x: 0, y: 0.72 },
+        colors,
+      });
+      void confetti({
+        particleCount: 80,
+        angle: 120,
+        spread: 65,
+        origin: { x: 1, y: 0.72 },
+        colors,
+      });
+    }, 180);
+
+    return () => window.clearTimeout(timeout);
+  }, [isFiestaOpen]);
+
+  useEffect(() => {
+    if (!isFiestaOpen) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsFiestaOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isFiestaOpen]);
 
   const refreshPurchaseTracking = useCallback(async (txHash: Hex) => {
     const currentBlock = await ethereumClient.getBlockNumber();
@@ -557,6 +604,8 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
 
   return (
     <div className="container mx-auto px-4 py-8 text-black md:py-12">
+      {isFiestaOpen && <QpadFiestaOverlay onClose={() => setIsFiestaOpen(false)} />}
+
       <section className="mb-8 flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
           <Avatar className="h-16 w-16 border-[3px] border-black bg-white sm:h-20 sm:w-20">
@@ -571,6 +620,9 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
           </div>
         </div>
       </section>
+
+      <QpadFiestaMarquee />
+      <QpadFiestaInlineBanner />
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
         <div className="contents lg:block lg:col-span-2 lg:space-y-8">
@@ -770,6 +822,124 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
         </div>
       </div>
     </div>
+  );
+}
+
+function QpadFiestaOverlay({ onClose }: { onClose: () => void }) {
+  return (
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm"
+      role="dialog"
+      onClick={onClose}
+    >
+      <div
+        className="relative max-h-[90vh] w-full max-w-3xl overflow-y-auto border-[3px] border-black bg-[#FFF8EC] shadow-[10px_10px_0_rgba(0,0,0,1)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <button
+          type="button"
+          aria-label="Close QPAD Fiesta"
+          className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center border-[3px] border-black bg-white text-black shadow-[3px_3px_0_rgba(0,0,0,1)] transition-transform hover:-translate-y-0.5"
+          onClick={onClose}
+        >
+          <X className="h-5 w-5" />
+        </button>
+
+        <img
+          src={qpadFiestaBanner}
+          alt="QPAD Fiesta presale incentives"
+          className="h-auto w-full border-b-[3px] border-black object-cover"
+        />
+
+        <div className="space-y-4 p-5 sm:p-6">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-black/55">QPAD Fiesta</p>
+            <h2 className="mt-1 text-3xl font-black uppercase leading-none sm:text-4xl">
+              Presale rewards are live
+            </h2>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="border-[3px] border-black bg-white p-4">
+              <p className="text-sm font-black uppercase tracking-[0.12em]">$1,000 USDC Draw</p>
+              <p className="mt-2 text-sm font-bold text-black/70">
+                Buy $250+ USDC in the presale and keep your transaction hash as proof of entry.
+              </p>
+            </div>
+            <div className="border-[3px] border-black bg-[#B8EF53] p-4">
+              <p className="text-sm font-black uppercase tracking-[0.12em]">Whale Rebates</p>
+              <p className="mt-2 text-sm font-bold text-black/75">
+                20 slots. Max $1,600 USDC buy. 6.25% cashback plus 5% bonus QPAD allocation.
+              </p>
+            </div>
+          </div>
+
+          <Button type="button" className="w-full sm:w-auto" onClick={onClose}>
+            Continue To Sale
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QpadFiestaMarquee() {
+  const items = [
+    "QPAD Fiesta",
+    "$1,000 USDC community draw",
+    "$250+ USDC entry",
+    "20 whale rebate slots",
+    "6.25% USDC cashback",
+    "+5% bonus QPAD allocation",
+    "Max buy $1,600 USDC",
+  ];
+
+  return (
+    <section className="neo-frame mb-6 overflow-hidden bg-[#111111] text-white">
+      <div className="overflow-hidden px-3 py-4 sm:px-4">
+        <div className="flex w-max items-center animate-launch-bar-slide">
+          {[0, 1].map((loop) => (
+            <div
+              key={`qpad-fiesta-message-${loop}`}
+              aria-hidden={loop === 1}
+              className="flex shrink-0 items-center gap-2 px-4 text-[10px] font-black uppercase tracking-[0.1em] whitespace-nowrap sm:gap-8 sm:px-10 sm:text-sm sm:tracking-[0.2em]"
+            >
+              {items.map((item, index) => (
+                <span key={`${loop}-${item}`} className="flex items-center gap-2 sm:gap-8">
+                  <span>{item}</span>
+                  <span className={index % 2 === 0 ? "text-[#B8EF53]" : "text-[#42C9FF]"}>•</span>
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function QpadFiestaInlineBanner() {
+  return (
+    <section className="neo-frame mb-8 overflow-hidden bg-white">
+      <div className="grid gap-0 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+        <div className="border-b-[3px] border-black bg-[#FFF8EC] p-5 sm:p-6 lg:border-b-0 lg:border-r-[3px]">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-black/55">QPAD Fiesta</p>
+          <h2 className="mt-2 text-3xl font-black uppercase leading-none sm:text-4xl">
+            Early buyers get more upside
+          </h2>
+          <p className="mt-3 max-w-2xl text-base font-bold text-black/70">
+            Buy $250+ USDC for the $1,000 community draw. Whale buyers can qualify for
+            6.25% USDC cashback and a 5% bonus QPAD allocation across 20 available slots.
+          </p>
+        </div>
+        <img
+          src={qpadFiestaBanner}
+          alt="QPAD Fiesta presale incentives"
+          className="h-full min-h-[220px] w-full object-cover"
+        />
+      </div>
+    </section>
   );
 }
 
