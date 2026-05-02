@@ -220,6 +220,7 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
   const [isBuying, setIsBuying] = useState(false);
   const [trackedPurchase, setTrackedPurchase] = useState<PurchaseTracker | null>(null);
   const [isFiestaOpen, setIsFiestaOpen] = useState(false);
+  const [hasDismissedFiesta, setHasDismissedFiesta] = useState(false);
 
   const manualQfAddressTrimmed = manualQfAddress.trim();
   const manualQfRecipient = useMemo(
@@ -369,6 +370,11 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
       document.body.style.overflow = previousOverflow;
     };
   }, [isFiestaOpen]);
+
+  const handleCloseFiesta = useCallback(() => {
+    setIsFiestaOpen(false);
+    setHasDismissedFiesta(true);
+  }, []);
 
   const refreshPurchaseTracking = useCallback(async (txHash: Hex) => {
     const currentBlock = await ethereumClient.getBlockNumber();
@@ -615,7 +621,7 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
 
   return (
     <div className="container mx-auto px-4 py-8 text-black md:py-12">
-      {isFiestaOpen && <QpadFiestaOverlay onClose={() => setIsFiestaOpen(false)} />}
+      {isFiestaOpen && <QpadFiestaOverlay onClose={handleCloseFiesta} />}
 
       <section className="mb-8 flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
@@ -632,7 +638,7 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
         </div>
       </section>
 
-      <QpadFiestaInlineBanner />
+      <QpadFiestaInlineBanner visible={hasDismissedFiesta} />
       <QpadFiestaMarquee />
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
@@ -889,9 +895,11 @@ function QpadFiestaMarquee() {
   );
 }
 
-function QpadFiestaInlineBanner() {
+function QpadFiestaInlineBanner({ visible }: { visible: boolean }) {
+  if (!visible) return null;
+
   return (
-    <section className="neo-frame mx-auto mb-8 w-full max-w-4xl overflow-hidden bg-white lg:hidden">
+    <section className="animate-fiesta-inline-banner-in neo-frame mx-auto mb-8 w-full max-w-4xl overflow-hidden bg-white lg:hidden">
       <div>
         <img
           src={qpadFiestaBanner}

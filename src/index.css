@@ -145,6 +145,12 @@ body {
     will-change: transform, opacity;
   }
 
+  .animate-fiesta-inline-banner-in {
+    animation: fiestaInlineBannerIn 0.78s cubic-bezier(0.18, 0.9, 0.22, 1) forwards;
+    transform-origin: center center;
+    will-change: transform, opacity;
+  }
+
 }
 
 @keyframes fadeInUp {
@@ -193,5 +199,26 @@ body {
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fiestaInlineBannerIn {
+  0% {
+    opacity: 0;
+    transform: translateY(42px) rotate(-11deg) scale(0.78);
+  }
+  52% {
+    opacity: 1;
+    transform: translateY(-8px) rotate(2.5deg) scale(1.04);
+  }
+  72% {
+    transform: translateY(5px) rotate(-1.25deg) scale(0.985);
+  }
+  86% {
+    transform: translateY(-2px) rotate(0.45deg) scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg) scale(1);
   }
 }
