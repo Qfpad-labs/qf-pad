@@ -3,24 +3,112 @@ import { XIcon as XSocialIcon } from "@/components/ui/icons/x-icon";
 import { useConnectModal } from "@/lib/papi/hooks";
 import { useCountUp } from "@/lib/hooks/useCountUp";
 import { useLaunchpadPresales } from "@/lib/hooks/useLaunchpadPresales";
-import { useReactPriceUsd } from "@/lib/hooks/useReactPriceUsd";
 import { BookOpen, Menu, X } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useMemo, useState } from "react";
-import { formatEther } from "viem";
+import { useEffect, useMemo, useState } from "react";
+import { createPublicClient, formatUnits, http, parseAbi } from "viem";
+import { mainnet } from "viem/chains";
 import { useAccount } from "@/lib/papi/hooks";
+import {
+  getQpadStaticPresales,
+  QPAD_ETH_MAINNET_PRESALE_ADDRESS,
+  type QpadStaticPresaleState,
+} from "@/config/static-presales";
 
 const cardStyles = [
   { bg: "bg-[#42C9FF]", text: "text-black" },
   { bg: "bg-[#FF7F41]", text: "text-black" },
   { bg: "bg-[#B8EF53]", text: "text-black" },
 ];
+const hiddenProjectTerms = ["brazenbull"];
+const hiddenProjectAddresses = new Set([
+  "0xf9db3b6bb2bee97aa2dca5b25e28ae9887fff908",
+]);
+
+function isHiddenProject(presale: { address: string; saleTokenName?: string; saleTokenSymbol?: string }) {
+  if (hiddenProjectAddresses.has(presale.address.toLowerCase())) return true;
+
+  const searchable = `${presale.saleTokenName ?? ""} ${presale.saleTokenSymbol ?? ""}`.toLowerCase();
+  return hiddenProjectTerms.some((term) => searchable.includes(term));
+}
+
+const ETH_MAINNET_RPC_URL =
+  import.meta.env.VITE_ETH_MAINNET_RPC_URL || "https://ethereum-rpc.publicnode.com";
+const qpadHomepageClient = createPublicClient({
+  chain: mainnet,
+  transport: http(ETH_MAINNET_RPC_URL),
+});
+const qpadHomepageAbi = parseAbi([
+  "function isSaleOpen() view returns (bool)",
+  "function totalRaised() view returns (uint256)",
+  "function totalQpadSold() view returns (uint256)",
+]);
 
 export default function Home() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [qpadSaleState, setQpadSaleState] = useState<QpadStaticPresaleState>();
   const { openConnectModal } = useConnectModal();
   const { address } = useAccount();
-  const { allPresales, isLoading: isLoadingPresales } = useLaunchpadPresales("all");
+  const { presales, isLoading: isLoadingPresales } = useLaunchpadPresales("all");
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const refreshQpadHomepageState = async () => {
+      try {
+        const [isSaleOpen, totalRaised, totalQpadSold] = await Promise.all([
+          qpadHomepageClient.readContract({
+            address: QPAD_ETH_MAINNET_PRESALE_ADDRESS,
+            abi: qpadHomepageAbi,
+            functionName: "isSaleOpen",
+          }),
+          qpadHomepageClient.readContract({
+            address: QPAD_ETH_MAINNET_PRESALE_ADDRESS,
+            abi: qpadHomepageAbi,
+            functionName: "totalRaised",
+          }),
+          qpadHomepageClient.readContract({
+            address: QPAD_ETH_MAINNET_PRESALE_ADDRESS,
+            abi: qpadHomepageAbi,
+            functionName: "totalQpadSold",
+          }),
+        ]);
+
+        if (!cancelled) {
+          setQpadSaleState({ isSaleOpen, totalRaised, totalQpadSold });
+        }
+      } catch (error) {
+        console.error("Unable to refresh homepage QPAD sale state", error);
+      }
+    };
+
+    void refreshQpadHomepageState();
+    const timer = window.setInterval(() => void refreshQpadHomepageState(), 15_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  const staticPresales = useMemo(
+    () => getQpadStaticPresales(nowMs, qpadSaleState),
+    [nowMs, qpadSaleState],
+  );
+
+  const allPresales = useMemo(() => {
+    const staticAddresses = new Set(staticPresales.map((presale) => presale.address.toLowerCase()));
+    return [
+      ...staticPresales,
+      ...presales.filter((presale) => !staticAddresses.has(presale.address.toLowerCase())),
+    ];
+  }, [presales, staticPresales]);
 
   const navLinks = [
     { label: "Projects", href: "/projects" },
@@ -28,30 +116,41 @@ export default function Home() {
     { label: "Create", href: "/dashboard/create" },
   ];
 
-  const featuredPresales = useMemo(() => {
-    const live = allPresales.filter((p) => p.status === "live");
-    const upcoming = allPresales.filter((p) => p.status === "upcoming");
-    return [...live, ...upcoming].slice(0, 3);
-  }, [allPresales]);
+  const visiblePresales = useMemo(
+    () => allPresales.filter((presale) => !isHiddenProject(presale)),
+    [allPresales],
+  );
 
-  const totalRaisedValue = useMemo(() => {
-    const sum = allPresales.reduce((acc, p) => acc + (p.totalRaised || 0n), 0n);
-    return parseFloat(formatEther(sum));
-  }, [allPresales]);
+  const featuredPresales = useMemo(() => {
+    const prioritized = [...visiblePresales]
+      .filter((p) => p.status === "live" || p.status === "upcoming")
+      .sort((a, b) => {
+        const aIsQpad = a.address.toLowerCase() === QPAD_ETH_MAINNET_PRESALE_ADDRESS.toLowerCase();
+        const bIsQpad = b.address.toLowerCase() === QPAD_ETH_MAINNET_PRESALE_ADDRESS.toLowerCase();
+        if (aIsQpad && !bIsQpad) return -1;
+        if (!aIsQpad && bIsQpad) return 1;
+        if (a.status !== b.status) return a.status === "live" ? -1 : 1;
+        return Number(a.startTime - b.startTime);
+      });
+
+    return prioritized.slice(0, 3);
+  }, [visiblePresales]);
+
+  const qpadUsdcRaisedValue = useMemo(() => {
+    const qpadSale = visiblePresales.find(
+      (presale) => presale.address.toLowerCase() === QPAD_ETH_MAINNET_PRESALE_ADDRESS.toLowerCase(),
+    );
+    if (!qpadSale?.totalRaised) return 0;
+    return Number(formatUnits(qpadSale.totalRaised, qpadSale.paymentTokenDecimals || 6));
+  }, [visiblePresales]);
 
   const livePresaleCount = useMemo(() => {
-    return allPresales.filter((p) => p.status === "live" || p.status === "upcoming").length;
-  }, [allPresales]);
+    return visiblePresales.filter((p) => p.status === "live" || p.status === "upcoming").length;
+  }, [visiblePresales]);
 
-  const { count: totalProjects, ref: totalProjectsRef } = useCountUp(allPresales.length);
-  const { count: totalRaised, ref: totalRaisedRef } = useCountUp(totalRaisedValue);
+  const { count: totalProjects, ref: totalProjectsRef } = useCountUp(visiblePresales.length);
+  const { count: totalRaised, ref: totalRaisedRef } = useCountUp(qpadUsdcRaisedValue);
   const { count: activePresales, ref: activePresalesRef } = useCountUp(livePresaleCount);
-  const qfPriceUsd = useReactPriceUsd();
-
-  const totalRaisedUsd = useMemo(() => {
-    if (qfPriceUsd === null) return null;
-    return totalRaised * qfPriceUsd;
-  }, [qfPriceUsd, totalRaised]);
 
   return (
     <main className="min-h-screen text-black">
@@ -172,15 +271,16 @@ export default function Home() {
               <div className="neo-frame rotate-[1deg] bg-[#FF7F41] p-6">
                 <p className="mb-3 text-xs font-black uppercase tracking-[0.16em]">Total Raised</p>
                 <p ref={totalRaisedRef} className="text-4xl font-black">
-                  {totalRaisedUsd === null
-                    ? "..."
-                    : `$${totalRaisedUsd.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}`}
+                  {`$${totalRaised.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}`}
                 </p>
                 <p className="mt-2 text-sm font-black uppercase tracking-[0.14em]">
-                  {totalRaised < 0.01 ? "0" : totalRaised.toFixed(2)} QF
+                  {`${qpadUsdcRaisedValue.toLocaleString(undefined, {
+                    minimumFractionDigits: qpadUsdcRaisedValue > 0 ? 2 : 0,
+                    maximumFractionDigits: 2,
+                  })} USDC`}
                 </p>
               </div>
             </div>

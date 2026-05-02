@@ -55,13 +55,6 @@ export const presaleMetadataMap: Record<string, PresaleMetadata> = {
       website: "",
       discord: "",
     },
-    cardDetails: [
-      { label: "Sale", value: "9,000,000 QPAD" },
-      { label: "Soft Cap", value: "$30,000" },
-      { label: "Min", value: "$50" },
-      { label: "Max", value: "$1,600" },
-      { label: "Rate", value: "1 USDC = 225 QPAD" },
-    ],
     cardCtaLabel: "Contribute",
   },
 };
