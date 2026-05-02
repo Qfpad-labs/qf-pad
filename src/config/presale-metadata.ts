@@ -47,7 +47,7 @@ export const presaleMetadataMap: Record<string, PresaleMetadata> = {
   },
   "0xed11ef1ca37f12635fff6ad6163486f884a521ca": {
     category: "infrastructure",
-    description: "Participate in the QPAD launch with USDC on Ethereum, then claim QPAD on QF Network.",
+    description: "Secure your allocation with USDC on Ethereum, then claim your QPAD on QF Network.",
     logo: "/qfpad-logo.png",
     socials: {
       twitter: "https://x.com/qfpad_",

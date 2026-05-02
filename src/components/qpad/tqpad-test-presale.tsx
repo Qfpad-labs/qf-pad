@@ -317,7 +317,7 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
   }, []);
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => setIsFiestaOpen(true), 250);
+    const timeout = window.setTimeout(() => setIsFiestaOpen(true), 360);
     return () => window.clearTimeout(timeout);
   }, []);
 
@@ -328,20 +328,20 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
     const timeout = window.setTimeout(() => {
       const colors = ["#B8EF53", "#42C9FF", "#FF7F41", "#F95D9B", "#FFFFFF"];
       void confetti({
-        particleCount: 80,
+        particleCount: 70,
         angle: 60,
-        spread: 65,
-        origin: { x: 0, y: 0.72 },
+        spread: 68,
+        origin: { x: 0.12, y: 0.24 },
         colors,
       });
       void confetti({
-        particleCount: 80,
+        particleCount: 70,
         angle: 120,
-        spread: 65,
-        origin: { x: 1, y: 0.72 },
+        spread: 68,
+        origin: { x: 0.88, y: 0.24 },
         colors,
       });
-    }, 180);
+    }, 560);
 
     return () => window.clearTimeout(timeout);
   }, [isFiestaOpen]);
@@ -357,6 +357,17 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isFiestaOpen]);
+
+  useEffect(() => {
+    if (!isFiestaOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
   }, [isFiestaOpen]);
 
   const refreshPurchaseTracking = useCallback(async (txHash: Hex) => {
@@ -621,8 +632,8 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
         </div>
       </section>
 
-      <QpadFiestaMarquee />
       <QpadFiestaInlineBanner />
+      <QpadFiestaMarquee />
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
         <div className="contents lg:block lg:col-span-2 lg:space-y-8">
@@ -640,24 +651,12 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
                 </Badge>
               </div>
               <Progress value={progress} className="h-4 border-[3px] border-black" />
-              <div className="mt-5 grid gap-4 text-sm font-bold sm:grid-cols-3">
+              <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-4 text-sm font-bold sm:grid-cols-4 sm:gap-x-2">
                 <Metric label="Sold" value={`${formatAmount(saleState.totalQpadSold, QPAD_DECIMALS)} ${sale.symbol}`} />
+                <Metric label="Rate" value={sale.rateLabel} />
                 <Metric label="Soft Cap" value={sale.softCapLabel} />
                 <Metric label="Hard Cap" value={sale.hardCapLabel} />
               </div>
-            </CardContent>
-          </Card>
-
-          <Card className="order-3 before:hidden">
-            <CardHeader>
-              <CardTitle>Sale Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-0 divide-y-2 divide-black/10">
-              <DetailRow label="Status" value={saleState.isSaleOpen ? "Live" : "Closed"} />
-              <DetailRow label="Rate" value={sale.rateLabel} />
-              <DetailRow label="Sale" value={sale.saleAmountLabel} />
-              <DetailRow label="Soft Cap" value={sale.softCapLabel} />
-              <DetailRow label="Hard Cap" value={sale.hardCapLabel} />
             </CardContent>
           </Card>
 
@@ -713,7 +712,7 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
                       <p>{ethChainId === mainnet.id ? "Ethereum" : "Wrong network"}</p>
                     </div>
                     <Button type="button" variant="outline" className="w-full" onClick={() => disconnectEvmWallet()}>
-                      Disconnect Ethereum
+                      Disconnect Metamask
                     </Button>
                   </div>
                 ) : (
@@ -829,12 +828,12 @@ function QpadFiestaOverlay({ onClose }: { onClose: () => void }) {
   return (
     <div
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm"
+      className="animate-fiesta-overlay-in fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm"
       role="dialog"
       onClick={onClose}
     >
       <div
-        className="relative max-h-[90vh] w-full max-w-3xl overflow-y-auto border-[3px] border-black bg-[#FFF8EC] shadow-[10px_10px_0_rgba(0,0,0,1)]"
+        className="animate-fiesta-banner-in relative w-full max-w-4xl overflow-hidden border-[3px] border-black bg-[#FFF8EC] shadow-[10px_10px_0_rgba(0,0,0,1)]"
         onClick={(event) => event.stopPropagation()}
       >
         <button
@@ -849,36 +848,8 @@ function QpadFiestaOverlay({ onClose }: { onClose: () => void }) {
         <img
           src={qpadFiestaBanner}
           alt="QPAD Fiesta presale incentives"
-          className="h-auto w-full border-b-[3px] border-black object-cover"
+          className="block h-auto w-full object-cover"
         />
-
-        <div className="space-y-4 p-5 sm:p-6">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-black/55">QPAD Fiesta</p>
-            <h2 className="mt-1 text-3xl font-black uppercase leading-none sm:text-4xl">
-              Presale rewards are live
-            </h2>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="border-[3px] border-black bg-white p-4">
-              <p className="text-sm font-black uppercase tracking-[0.12em]">$1,000 USDC Draw</p>
-              <p className="mt-2 text-sm font-bold text-black/70">
-                Buy $250+ USDC in the presale and keep your transaction hash as proof of entry.
-              </p>
-            </div>
-            <div className="border-[3px] border-black bg-[#B8EF53] p-4">
-              <p className="text-sm font-black uppercase tracking-[0.12em]">Whale Rebates</p>
-              <p className="mt-2 text-sm font-bold text-black/75">
-                20 slots. Max $1,600 USDC buy. 6.25% cashback plus 5% bonus QPAD allocation.
-              </p>
-            </div>
-          </div>
-
-          <Button type="button" className="w-full sm:w-auto" onClick={onClose}>
-            Continue To Sale
-          </Button>
-        </div>
       </div>
     </div>
   );
@@ -887,12 +858,11 @@ function QpadFiestaOverlay({ onClose }: { onClose: () => void }) {
 function QpadFiestaMarquee() {
   const items = [
     "QPAD Fiesta",
+    "Early buyers get more upside",
     "$1,000 USDC community draw",
-    "$250+ USDC entry",
     "20 whale rebate slots",
     "6.25% USDC cashback",
     "+5% bonus QPAD allocation",
-    "Max buy $1,600 USDC",
   ];
 
   return (
@@ -921,22 +891,12 @@ function QpadFiestaMarquee() {
 
 function QpadFiestaInlineBanner() {
   return (
-    <section className="neo-frame mb-8 overflow-hidden bg-white">
-      <div className="grid gap-0 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
-        <div className="border-b-[3px] border-black bg-[#FFF8EC] p-5 sm:p-6 lg:border-b-0 lg:border-r-[3px]">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-black/55">QPAD Fiesta</p>
-          <h2 className="mt-2 text-3xl font-black uppercase leading-none sm:text-4xl">
-            Early buyers get more upside
-          </h2>
-          <p className="mt-3 max-w-2xl text-base font-bold text-black/70">
-            Buy $250+ USDC for the $1,000 community draw. Whale buyers can qualify for
-            6.25% USDC cashback and a 5% bonus QPAD allocation across 20 available slots.
-          </p>
-        </div>
+    <section className="neo-frame mx-auto mb-8 w-full max-w-4xl overflow-hidden bg-white lg:hidden">
+      <div>
         <img
           src={qpadFiestaBanner}
           alt="QPAD Fiesta presale incentives"
-          className="h-full min-h-[220px] w-full object-cover"
+          className="block h-auto w-full"
         />
       </div>
     </section>
@@ -945,9 +905,9 @@ function QpadFiestaInlineBanner() {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-black/55">{label}</p>
-      <p className="mt-1 text-base font-black uppercase leading-tight">{value}</p>
+    <div className="min-w-0">
+      <p className="text-[10px] font-black uppercase tracking-[0.12em] text-black/55">{label}</p>
+      <p className="mt-1 text-sm font-black uppercase leading-tight sm:text-[13px]">{value}</p>
     </div>
   );
 }
