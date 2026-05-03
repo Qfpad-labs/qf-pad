@@ -839,23 +839,33 @@ function QpadFiestaOverlay({ onClose }: { onClose: () => void }) {
       onClick={onClose}
     >
       <div
-        className="animate-fiesta-banner-in relative w-full max-w-4xl overflow-hidden border-[3px] border-black bg-[#FFF8EC] shadow-[10px_10px_0_rgba(0,0,0,1)]"
+        className="relative w-full max-w-4xl"
         onClick={(event) => event.stopPropagation()}
       >
         <button
           type="button"
           aria-label="Close QPAD Fiesta"
-          className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center border-[3px] border-black bg-white text-black shadow-[3px_3px_0_rgba(0,0,0,1)] transition-transform hover:-translate-y-0.5"
+          className="absolute right-0 -top-10 z-10 text-white md:hidden"
+          onClick={onClose}
+        >
+          <X className="h-6 w-6" />
+        </button>
+        <button
+          type="button"
+          aria-label="Close QPAD Fiesta"
+          className="absolute right-3 top-3 z-10 hidden h-10 w-10 items-center justify-center border-[3px] border-black bg-white text-black shadow-[3px_3px_0_rgba(0,0,0,1)] transition-transform hover:-translate-y-0.5 md:flex"
           onClick={onClose}
         >
           <X className="h-5 w-5" />
         </button>
 
-        <img
-          src={qpadFiestaBanner}
-          alt="QPAD Fiesta presale incentives"
-          className="block h-auto w-full object-cover"
-        />
+        <div className="animate-fiesta-banner-in w-full overflow-hidden border-[3px] border-black bg-[#FFF8EC] shadow-[10px_10px_0_rgba(0,0,0,1)]">
+          <img
+            src={qpadFiestaBanner}
+            alt="QPAD Fiesta presale incentives"
+            className="block h-auto w-full object-cover"
+          />
+        </div>
       </div>
     </div>
   );
