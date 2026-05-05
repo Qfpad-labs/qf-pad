@@ -18,6 +18,7 @@ import { useAccount, useWaitForTransactionReceipt, useWriteContract } from "@/li
 import { Coins, ExternalLink, CheckCircle2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { getFriendlyTxErrorMessage } from "@/lib/utils/tx-errors";
+import { useChatbotActionStore } from "@/lib/store/chatbot-action-store";
 
 const TokenType = {
   Plain: 0,
@@ -53,6 +54,19 @@ export default function CreateTokenPage() {
       setInitialRecipient(address);
     }
   }, [address])
+
+  const { draft, clearDraft } = useChatbotActionStore();
+  useEffect(() => {
+    if (draft?.actionType === "create_token" && draft.prefill) {
+      if (draft.prefill.name) setName(draft.prefill.name);
+      if (draft.prefill.symbol) setSymbol(draft.prefill.symbol);
+      if (draft.prefill.decimals) setDecimals(draft.prefill.decimals);
+      if (draft.prefill.initialSupply) setInitialSupply(draft.prefill.initialSupply);
+      if (draft.prefill.tokenType) setTokenType(parseInt(draft.prefill.tokenType) as TokenType);
+      if (draft.prefill.initialRecipient) setInitialRecipient(draft.prefill.initialRecipient);
+      clearDraft();
+    }
+  }, [draft, clearDraft]);
 
   const handleCreateToken = async () => {
     setCreatedTokenAddress(null);

@@ -27,6 +27,7 @@ import {
   Unlock,
   Send,
 } from "lucide-react";
+import { useChatbotActionStore } from "@/lib/store/chatbot-action-store";
 
 interface LockData {
   id: bigint;
@@ -280,10 +281,13 @@ function CreateLockModal({
 
   // Normalize token address from URL (trim whitespace, ensure lowercase for consistency)
   const tokenFromUrl = searchParams.get("token")?.trim() ?? "";
+  const amountFromUrl = searchParams.get("amount")?.trim() ?? "";
+  const durationFromUrl = searchParams.get("duration")?.trim() ?? "";
+  const nameFromUrl = searchParams.get("name")?.trim() ?? "";
   const [tokenAddress, setTokenAddress] = useState(tokenFromUrl);
-  const [amount, setAmount] = useState("");
-  const [duration, setDuration] = useState("");
-  const [name, setName] = useState("");
+  const [amount, setAmount] = useState(amountFromUrl);
+  const [duration, setDuration] = useState(durationFromUrl);
+  const [name, setName] = useState(nameFromUrl);
   const [description, setDescription] = useState("");
   const [hasApproved, setHasApproved] = useState(false);
 
@@ -866,12 +870,27 @@ function TransferLockModal({
 export default function TokenLockerPage() {
   const { address } = useAccount();
   const { explorerUrl, tokenLocker } = useChainContracts();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [extendingLockId, setExtendingLockId] = useState<bigint | null>(null);
   const [transferringLockId, setTransferringLockId] = useState<bigint | null>(
     null
   );
   const [unlockingId, setUnlockingId] = useState<bigint | null>(null);
+
+  const { draft, clearDraft } = useChatbotActionStore();
+  useEffect(() => {
+    if (draft?.actionType === "lock_token" && draft.prefill) {
+      const params = new URLSearchParams(searchParams);
+      if (draft.prefill.token) params.set("token", draft.prefill.token);
+      if (draft.prefill.amount) params.set("amount", draft.prefill.amount);
+      if (draft.prefill.duration) params.set("duration", draft.prefill.duration);
+      if (draft.prefill.name) params.set("name", draft.prefill.name);
+      setSearchParams(params);
+      setShowCreateModal(true);
+      clearDraft();
+    }
+  }, [draft, clearDraft]);
 
   const { data: unlockHash, writeContract: unlockTokens } = useWriteContract();
   const { isSuccess: isUnlockSuccess } = useWaitForTransactionReceipt({

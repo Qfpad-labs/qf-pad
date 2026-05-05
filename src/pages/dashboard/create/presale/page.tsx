@@ -25,6 +25,7 @@ import {
   useWriteContract,
 } from "@/lib/papi/hooks";
 import { erc20Abi } from "@/config";
+import { useChatbotActionStore } from "@/lib/store/chatbot-action-store";
 
 interface PresaleFormData {
   saleToken: string;
@@ -402,6 +403,23 @@ export default function CreatePresalePage() {
       navigate("/dashboard/create/project");
     }
   }, [isLoadingWhitelist, isWhitelisted, address, navigate]);
+
+  const { draft, clearDraft } = useChatbotActionStore();
+  useEffect(() => {
+    if (draft?.actionType === "create_presale" && draft.prefill) {
+      setFormData((prev) => ({
+        ...prev,
+        ...(draft.prefill.saleToken ? { saleToken: draft.prefill.saleToken } : {}),
+        ...(draft.prefill.paymentToken ? { paymentToken: draft.prefill.paymentToken } : {}),
+        ...(draft.prefill.saleAmount ? { saleAmount: draft.prefill.saleAmount } : {}),
+        ...(draft.prefill.softCap ? { softCap: draft.prefill.softCap } : {}),
+        ...(draft.prefill.hardCap ? { hardCap: draft.prefill.hardCap } : {}),
+        ...(draft.prefill.startTime ? { startTime: draft.prefill.startTime } : {}),
+        ...(draft.prefill.endTime ? { endTime: draft.prefill.endTime } : {}),
+      }));
+      clearDraft();
+    }
+  }, [draft, clearDraft]);
 
   const {
     data: receipt,

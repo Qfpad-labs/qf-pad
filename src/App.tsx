@@ -21,35 +21,39 @@ import AdminDashboard from "./pages/admin/page";
 import AdminPresales from "./pages/admin/presales/page";
 import AdminWhitelist from "./pages/admin/whitelist/page";
 import RootLayout from "./RootLayout";
+import { ChatbotBubble } from "./components/chat/chatbot-bubble";
 
 function App() {
   return (
     <RootLayout>
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route element={<AppLayout />}>
-            <Route path="/dashboard/create" element={<CreateHubPage />} />
-            <Route path="/dashboard/create/nft" element={<CreateNftPage />} />
-            <Route path="/dashboard/create/presale" element={<CreatePresalePage />} />
-            <Route path="/dashboard/create/project" element={<CreateProjectPage />} />
-            <Route path="/dashboard/create/token" element={<CreateTokenPage />} />
-            <Route path="/dashboard/presales" element={<PresalesListPage />} />
-            <Route path="/dashboard/presales/manage/:address" element={<ManagePresalePage />} />
-            <Route path="/dashboard/staking" element={<StakingPage />} />
-            <Route path="/dashboard/tools/airdrop" element={<AirdropPage />} />
-            <Route path="/dashboard/tools/token-locker" element={<TokenLockerPage />} />
-            <Route path="/dashboard/user" element={<UserDashboardPage />} />
-            <Route path="/nfts" element={<NFTsPage />} />
-            <Route path="/nfts/:id" element={<NFTDetailPage />} />
-            <Route path="/projects" element={<ProjectsPage />} />
-            <Route path="/projects/:id" element={<ProjectDetailPage />} />
-            <Route path="/locks/:id" element={<LockDetailPage />} />
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/admin/presales" element={<AdminPresales />} />
-            <Route path="/admin/whitelist" element={<AdminWhitelist />} />
-          </Route>
-        </Routes>
+        <>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route element={<AppLayout />}>
+              <Route path="/dashboard/create" element={<CreateHubPage />} />
+              <Route path="/dashboard/create/nft" element={<CreateNftPage />} />
+              <Route path="/dashboard/create/presale" element={<CreatePresalePage />} />
+              <Route path="/dashboard/create/project" element={<CreateProjectPage />} />
+              <Route path="/dashboard/create/token" element={<CreateTokenPage />} />
+              <Route path="/dashboard/presales" element={<PresalesListPage />} />
+              <Route path="/dashboard/presales/manage/:address" element={<ManagePresalePage />} />
+              <Route path="/dashboard/staking" element={<StakingPage />} />
+              <Route path="/dashboard/tools/airdrop" element={<AirdropPage />} />
+              <Route path="/dashboard/tools/token-locker" element={<TokenLockerPage />} />
+              <Route path="/dashboard/user" element={<UserDashboardPage />} />
+              <Route path="/nfts" element={<NFTsPage />} />
+              <Route path="/nfts/:id" element={<NFTDetailPage />} />
+              <Route path="/projects" element={<ProjectsPage />} />
+              <Route path="/projects/:id" element={<ProjectDetailPage />} />
+              <Route path="/locks/:id" element={<LockDetailPage />} />
+              <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/admin/presales" element={<AdminPresales />} />
+              <Route path="/admin/whitelist" element={<AdminWhitelist />} />
+            </Route>
+          </Routes>
+          <ChatbotBubble />
+        </>
       </BrowserRouter>
     </RootLayout>
   );

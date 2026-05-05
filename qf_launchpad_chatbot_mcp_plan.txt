@@ -1,0 +1,584 @@
+QF Launchpad Chatbot + Action Layer Plan
+
+Purpose
+
+This plan is for a chatbot that lives alongside the existing QFPad app and helps
+users do two things:
+
+1. Get grounded answers from QFPad docs and live sale state.
+2. Prepare launchpad actions in natural language without replacing wallet-level
+   consent.
+
+This plan is tailored to the current codebase:
+
+- Frontend app: `/Users/mac/tg/QFpad/QFPad`
+- Allocator worker: `/Users/mac/tg/QFpad/qpad-allocator-worker`
+- QF write model: PAPI / `revive.call(...)` with SS58 signer
+- Ethereum presale model: Wagmi / RainbowKit / MetaMask / WalletConnect
+
+
+1. Decisions Up Front
+
+These are the decisions I would lock in before building:
+
+- Build the chatbot as a separate service in a new top-level directory:
+  `/Users/mac/tg/QFpad/qfpad-chat-api`
+- Deploy the chatbot as a separate Render web service.
+- Reuse the same Supabase Postgres project and credentials.
+- Keep allocator tables intact and create a separate `chatbot` schema.
+- Use DeepSeek v4 for chat generation.
+- Ground answers with:
+  - small-doc retrieval from GitBook
+  - live tool calls for mutable presale and wallet data
+- In v1, the chatbot prepares actions and routes users into existing flows.
+- In v1, the chatbot does not sign or submit arbitrary user transactions
+  server-side.
+
+
+2. Why The Chatbot Should Not Live In The Allocator Service
+
+Do not add chatbot traffic to the existing `qpad-allocator-worker` service.
+
+Reason:
+
+- the allocator already holds a QF allocator keystore
+- it is a background signer process, not a public chat endpoint
+- chat traffic is public, bursty, and failure-prone
+- mixing public LLM traffic with a privileged signing worker is bad isolation
+- if chat stalls or spikes, it can interfere with allocation processing
+
+Recommended split:
+
+- `QFPad` -> Netlify frontend
+- `qpad-allocator-worker` -> Render worker/web service for sale registration
+- `qfpad-chat-api` -> Render web service for chat, docs retrieval, action drafts
+
+
+3. What The Chatbot Should Actually Do
+
+The chatbot should handle:
+
+- docs Q&A
+- sale Q&A
+- action planning
+- action prefill
+- transaction explanation
+- wallet-aware next-step guidance
+
+Examples:
+
+- "Create a token called MOBI with 1,000,000 supply"
+- "Lock 20,000 of this token for 10 days"
+- "What does the token locker do?"
+- "How do I claim my QPAD?"
+- "What is the current QPAD rate and hard cap?"
+- "Why is my purchase still pending?"
+
+The chatbot should not:
+
+- hold user seed phrases
+- hold user private keys
+- submit arbitrary user-owned transactions from a backend key
+- generate raw calldata and execute it unchecked
+
+
+4. The Most Important Constraint: Signing
+
+You asked about users signing a one-time message so the app can create
+transactions on their behalf and avoid repeated Talisman prompts.
+
+For the current architecture, a one-time off-chain signature is not enough.
+
+It can prove user intent off-chain, but it does not by itself authorize on-chain
+contract calls from a backend service.
+
+Why:
+
+- QF writes currently happen through the user wallet signer or a dedicated server
+  keystore that is already authorized for one narrow purpose
+- token creation, token locking, airdrops, staking, and claim flows are user
+  actions, not allocator-owned actions
+- the backend cannot impersonate the user just because it has an off-chain
+  message
+
+So the correct v1 answer is:
+
+- chatbot drafts the action
+- frontend shows a transaction preview
+- user signs with wallet
+
+That is the safest and fastest path.
+
+
+5. If We Want Fewer Wallet Prompts Later
+
+This is a separate v2 project, not something I would blend into the first chat
+rollout.
+
+Possible paths:
+
+5.1 Delegated executor contract
+
+- User explicitly grants a contract limited rights.
+- Backend relays only allowed actions.
+- Grant must include:
+  - chain
+  - allowed contract addresses
+  - allowed function selectors
+  - max amount
+  - total cap
+  - expiry
+  - nonce / replay protection
+
+This is the cleanest custom design if QF wallet UX remains unstable.
+
+5.2 Native QF proxy / delegated account flow
+
+- Only viable if QF exposes the right proxy primitives for your use case and the
+  wallet stack handles them reliably.
+- This needs explicit verification before planning around it.
+
+5.3 Smart account / session key model
+
+- Only worth pursuing if QF ETH-RPC account abstraction becomes reliable enough.
+- Not the first move for this repo.
+
+Practical conclusion:
+
+- v1: no backend signing for user actions
+- v2: delegated executor if we truly need reduced prompts
+
+
+6. Repo-Specific Integration Model
+
+The current app already has the flows the chatbot should target.
+
+Existing routes:
+
+- `/dashboard/create/token`
+- `/dashboard/create/presale`
+- `/dashboard/tools/token-locker`
+- `/dashboard/tools/airdrop`
+- `/dashboard/staking`
+- `/projects/:id`
+
+So instead of inventing a second execution layer immediately, the chatbot should
+return structured drafts that prefill these flows.
+
+Recommended frontend integration:
+
+- Add a chat widget component under `src/components/chat/`
+- Mount it from `RootLayout` or `AppLayout`
+- Add a Zustand draft store:
+  - `src/lib/store/chatbot-action-store.ts`
+- When the chatbot returns an action draft:
+  - save draft in store
+  - navigate user to the correct route
+  - consume the draft in that page and prefill the form
+
+This is better than encoding everything into query params.
+
+
+7. Action Model
+
+The chatbot should not execute free-form tool calls. It should emit typed action
+objects.
+
+Suggested action types:
+
+- `create_token`
+- `create_presale`
+- `lock_token`
+- `extend_lock`
+- `transfer_lock`
+- `airdrop_tokens`
+- `contribute_qpad_sale`
+- `claim_qpad`
+- `open_route`
+- `explain_transaction`
+
+Each action should return:
+
+- `actionType`
+- `targetRoute`
+- `requiredWallet`
+- `requiredChain`
+- `prefill`
+- `summary`
+- `warnings`
+- `missingFields`
+- `nextSteps`
+
+Example:
+
+{
+  "actionType": "create_token",
+  "targetRoute": "/dashboard/create/token",
+  "requiredWallet": "qf",
+  "requiredChain": "QF Network",
+  "prefill": {
+    "name": "MOBI",
+    "symbol": "MOBI",
+    "initialSupply": "1000000",
+    "decimals": "18"
+  },
+  "summary": "Create a plain token with 1,000,000 supply.",
+  "warnings": [],
+  "missingFields": [],
+  "nextSteps": [
+    "Review token settings",
+    "Connect QF wallet",
+    "Sign deployment transaction"
+  ]
+}
+
+
+8. Chat API Structure
+
+Create a new service:
+
+- `/Users/mac/tg/QFpad/qfpad-chat-api`
+
+Suggested stack:
+
+- Node.js
+- TypeScript
+- Fastify
+- `pg`
+- `zod`
+- optional `pino`
+
+Suggested endpoints:
+
+- `POST /api/chat`
+- `GET /api/chat/health`
+- `POST /api/chat/docs/sync` (admin-only or disabled in prod)
+
+Internal modules:
+
+- `src/server.ts`
+- `src/routes/chat.ts`
+- `src/routes/health.ts`
+- `src/llm/deepseek.ts`
+- `src/retrieval/docs.ts`
+- `src/actions/registry.ts`
+- `src/actions/builders/*.ts`
+- `src/db.ts`
+- `src/migrate.ts`
+- `src/sync/gitbook.ts`
+- `src/tools/*.ts`
+
+
+9. MCP vs Tool Calling
+
+For this project, do not overbuild a standalone general-purpose MCP server on
+day one.
+
+DeepSeek can sit behind a typed tool/action layer in your own service.
+
+So the practical approach is:
+
+- internal tool registry
+- typed request/response contracts
+- deterministic validation
+- JSON action outputs
+
+If later you want external agent clients to call the same tools, then wrap the
+same registry behind a formal MCP surface.
+
+
+10. DeepSeek Integration
+
+Use DeepSeek v4 through a thin provider adapter.
+
+The adapter should support:
+
+- chat completion
+- tool / structured output mode
+- low-temperature action planning
+- citation-friendly answer formatting
+
+The service must not let the model directly call chain SDKs or DB methods. The
+model should only receive the outputs of approved internal tools.
+
+Recommended model behaviors:
+
+- answer from retrieved docs or live tool outputs only
+- if grounding is missing, say so
+- do not invent sale numbers
+- do not invent contract addresses
+- do not invent wallet capabilities
+
+
+11. How To Ground It In Docs Without Overengineering
+
+Docs base:
+
+- `https://qfpad.gitbook.io/qfpad`
+
+Because the docs set is not large, start with lightweight retrieval, not a full
+vector-first RAG stack.
+
+Recommended v1 docs pipeline:
+
+1. Maintain a curated list of GitBook page URLs to ingest.
+2. Fetch each page as HTML.
+3. Extract title, headings, and cleaned text.
+4. Chunk each page into small overlapping sections.
+5. Store chunks in Postgres.
+6. Use PostgreSQL full-text search for retrieval.
+7. Return top 4-6 chunks to DeepSeek.
+8. Include citations in the final answer.
+
+This is enough for a small docs corpus.
+
+When to add embeddings:
+
+- only after docs volume grows
+- or if lexical search quality becomes poor
+
+So:
+
+- v1: full-text search
+- v2: hybrid full-text + pgvector if needed
+
+
+12. Docs Grounding And Presale Grounding Are Different
+
+Do not treat live sale state as documentation.
+
+For mutable data such as:
+
+- sale status
+- hard cap progress
+- wallet balances
+- claimable amount
+- purchase registration state
+
+use live tools, not doc chunks.
+
+Suggested live tools:
+
+- `get_qpad_sale_status`
+- `get_qpad_purchase_status`
+- `get_qf_wallet_mapping`
+- `get_qf_wallet_balances`
+- `get_user_locks`
+- `get_token_factory_addresses`
+
+For QPAD specifically, the chatbot should read current values from:
+
+- existing frontend contract config
+- live chain reads
+- allocator status API where relevant
+
+That prevents hallucinated sale numbers.
+
+
+13. Supabase / Postgres Plan
+
+Yes, use the same Supabase Postgres project and credentials.
+
+Do not create a separate database.
+
+Do create a separate schema:
+
+- `chatbot`
+
+That keeps allocator data intact and clearly separated.
+
+Allocator tables stay untouched, for example:
+
+- `qpad_purchases`
+- `qpad_sync_state`
+- `qpad_runner_heartbeats`
+
+New chatbot schema proposal:
+
+- `chatbot.doc_sources`
+- `chatbot.doc_chunks`
+- `chatbot.chat_sessions`
+- `chatbot.chat_messages`
+- `chatbot.action_drafts`
+- `chatbot.tool_runs`
+
+Recommended minimum columns:
+
+`chatbot.doc_sources`
+- `id`
+- `source_url`
+- `title`
+- `content_hash`
+- `last_synced_at`
+
+`chatbot.doc_chunks`
+- `id`
+- `source_id`
+- `chunk_index`
+- `heading_path`
+- `chunk_text`
+- `tsv` for full-text search
+- `created_at`
+
+`chatbot.chat_sessions`
+- `id`
+- `wallet_address`
+- `ss58_address`
+- `evm_address`
+- `created_at`
+- `updated_at`
+
+`chatbot.chat_messages`
+- `id`
+- `session_id`
+- `role`
+- `content`
+- `citations_json`
+- `created_at`
+
+`chatbot.action_drafts`
+- `id`
+- `session_id`
+- `action_type`
+- `route`
+- `required_wallet`
+- `required_chain`
+- `prefill_json`
+- `status`
+- `created_at`
+
+`chatbot.tool_runs`
+- `id`
+- `session_id`
+- `tool_name`
+- `input_json`
+- `output_json`
+- `status`
+- `created_at`
+
+Keep the chatbot migrations in the new chat service repo.
+
+
+14. Hosting
+
+Recommended:
+
+- Render web service for `qfpad-chat-api`
+
+Reason:
+
+- same platform as allocator
+- easy env management
+- simple HTTP deployment
+- no need to mix background signer responsibilities with chat
+
+You probably do not need a dedicated background worker for docs on day one.
+
+Simplest docs sync options:
+
+- manual `npm run docs:sync`
+- post-deploy sync
+- scheduled Render cron job once or twice daily
+
+Because the docs corpus is small, a second continuous worker is unnecessary.
+
+
+15. Environment Variables
+
+For `qfpad-chat-api`:
+
+- `DATABASE_URL`
+- `DATABASE_SSL=true`
+- `DEEPSEEK_API_KEY`
+- `DEEPSEEK_BASE_URL`
+- `DEEPSEEK_MODEL`
+- `CHAT_CORS_ORIGIN=https://qfpad.xyz`
+- `QFPAD_DOCS_BASE_URL=https://qfpad.gitbook.io/qfpad`
+- `ETH_MAINNET_RPC_URL`
+- `QF_ETH_RPC_URL`
+- `QF_WS_RPC_URL`
+- `QPAD_STATUS_API_BASE_URL` (points to the allocator worker)
+
+For `QFPad` frontend:
+
+- `VITE_CHAT_API_BASE_URL=https://<render-chat-service>.onrender.com`
+
+
+16. Security Rules
+
+Hard rules:
+
+- chat service must not store user seeds
+- chat service must not reuse allocator keystore
+- chat service must not accept raw private keys
+- chat service must not submit free-form calldata generated by the model
+- every action draft must pass server-side validation before returning to UI
+- the model must never be the final authority for executing an action
+
+For answers:
+
+- docs answers require citations
+- sale answers require live reads
+- if the data is missing, answer "I do not have enough grounded data"
+
+
+17. Implementation Phases
+
+Phase 1: Read-only grounded chat
+
+- scaffold `qfpad-chat-api`
+- create `chatbot` schema
+- implement GitBook sync
+- implement docs retrieval
+- implement `POST /api/chat`
+- add frontend chat widget
+- support docs Q&A and sale Q&A only
+
+Phase 2: Action drafts
+
+- define action schemas
+- add chatbot draft store in frontend
+- implement draft-returning tools
+- prefill token create / token lock / presale / airdrop pages
+- keep signing entirely in current wallet flows
+
+Phase 3: Live wallet-aware tools
+
+- add read-only tools for balances, locks, sale state, claimable amounts
+- add purchase status lookup through allocator status API
+- add transaction explanation / preview layer
+
+Phase 4: Delegated execution research
+
+- verify whether QF native proxy is good enough
+- if not, design a dedicated delegated executor contract
+- scope permissions narrowly
+- do not merge this into chat v1
+
+
+18. Recommended Build Order
+
+If the goal is speed with the fewest moving parts:
+
+1. New repo directory: `qfpad-chat-api`
+2. Same Supabase DB, new `chatbot` schema
+3. Docs sync + full-text retrieval
+4. DeepSeek answer endpoint
+5. Frontend chat widget
+6. QPAD sale grounding tools
+7. Action draft system
+8. Route prefill integration
+
+
+19. Final Recommendation
+
+Build the chatbot as a separate top-level service and keep it narrow:
+
+- grounded answers
+- structured action drafts
+- frontend prefill
+- wallet-signed execution
+
+Do not try to solve "backend signs user actions from one message" in the first
+release. For QF, that is a delegated execution product with real security and
+chain-design work behind it, not a prompt-engineering shortcut.
