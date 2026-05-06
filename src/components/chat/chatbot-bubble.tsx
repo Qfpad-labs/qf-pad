@@ -600,7 +600,7 @@ export function ChatbotBubble() {
           onClick={() => setIsOpen((open) => !open)}
           aria-expanded={isOpen}
           aria-label={isOpen ? "Hide chatbot" : "Show chatbot"}
-          className="inline-flex h-14 w-14 items-center justify-center rounded-full border-[3px] border-black bg-[#42C9FF] text-black shadow-[6px_6px_0_rgba(0,0,0,1)] transition-transform hover:-translate-y-1"
+          className={`${isOpen ? "hidden md:inline-flex" : "inline-flex"} h-14 w-14 items-center justify-center rounded-full border-[3px] border-black bg-[#42C9FF] text-black shadow-[6px_6px_0_rgba(0,0,0,1)] transition-transform hover:-translate-y-1`}
         >
           {isOpen ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
         </button>
