@@ -233,13 +233,13 @@ export default function Home() {
         </header>
 
         <section className="mb-16 grid gap-8 lg:grid-cols-[1.3fr_0.7fr]">
-          <div className="neo-frame bg-[#FFF2D5] p-8 sm:p-10 animate-fade-in-up animation-delay-200">
-            <h1 className="text-5xl font-black uppercase leading-[0.9] tracking-tight sm:text-7xl lg:text-8xl">
+          <div className="neo-frame bg-[#FFF2D5] p-6 sm:p-10 animate-fade-in-up animation-delay-200">
+            <h1 className="text-3xl font-black uppercase leading-[0.9] tracking-tight sm:text-7xl lg:text-8xl">
               LAUNCH IDEAS.
               <br />
               MOON PROJECTS.
             </h1>
-            <p className="mt-6 max-w-2xl text-lg font-bold sm:text-xl">
+            <p className="mt-6 max-w-2xl text-base font-bold sm:text-xl">
               Discover, back, and launch the most promising projects on the QF Network.
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
@@ -319,7 +319,7 @@ export default function Home() {
         </section>
 
         <section className="mb-16 animate-fade-in-up">
-          <h2 className="mb-6 text-4xl font-black uppercase tracking-tight sm:text-5xl">Featured Launches</h2>
+          <h2 className="mb-6 text-3xl font-black uppercase tracking-tight sm:text-5xl">Featured Launches</h2>
           <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
             {isLoadingPresales ? (
               <div className="neo-frame -rotate-[0.7deg] bg-white p-8 text-center font-black uppercase md:col-span-2 lg:col-span-3">
@@ -355,8 +355,8 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="neo-frame -rotate-[0.75deg] mb-12 bg-white p-8 sm:p-12 animate-fade-in-up animation-delay-200">
-          <h2 className="text-4xl font-black uppercase leading-[0.95] tracking-tight sm:text-6xl">
+        <section className="neo-frame -rotate-[0.75deg] mb-12 bg-white p-6 sm:p-12 animate-fade-in-up animation-delay-200">
+          <h2 className="text-3xl font-black uppercase leading-[0.95] tracking-tight sm:text-6xl">
             Launch Faster,
             <br />
             Fund Smarter

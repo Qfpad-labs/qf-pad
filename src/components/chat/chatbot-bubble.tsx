@@ -439,12 +439,12 @@ export function ChatbotBubble() {
         <button
           type="button"
           onClick={() => setIsOpen(false)}
-          className="fixed inset-0 z-40 bg-black/5 backdrop-blur-[1.5px] md:hidden"
+          className="fixed inset-0 z-[55] bg-black/[0.03] backdrop-blur-[0.5px] md:hidden"
           aria-label="Close chat overlay"
         />
       )}
 
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-3">
+      <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-[60] flex flex-col items-end gap-3">
         {isOpen && (
           <div
             className={`flex flex-col overflow-hidden rounded-[26px] border-[3px] border-black bg-white text-black shadow-[8px_8px_0_rgba(0,0,0,1)] ${
@@ -473,7 +473,7 @@ export function ChatbotBubble() {
             <div
               ref={scrollRef}
               className={`min-h-[13rem] flex-1 overflow-y-auto px-3 py-3 sm:px-4 ${
-                isSignFlowExpanded ? "max-h-[min(72vh,34rem)]" : "max-h-[min(62vh,28rem)]"
+                isSignFlowExpanded ? "max-h-[min(72dvh,34rem)]" : "max-h-[min(62dvh,28rem)]"
               }`}
             >
               {!hasMessages && !isLoading && (
@@ -574,7 +574,7 @@ export function ChatbotBubble() {
                   placeholder={isGuestLocked ? "Connect a wallet to keep chatting" : idlePlaceholder}
                   disabled={isLoading || isGuestLocked}
                   maxLength={600}
-                  className="flex-1 rounded-full border-[2px] border-black px-4 py-2 text-sm font-bold placeholder:text-black/35 focus:outline-none disabled:opacity-50"
+                  className="flex-1 rounded-full border-[2px] border-black px-4 py-2 text-base font-bold placeholder:text-black/35 focus:outline-none disabled:opacity-50"
                 />
                 <button
                   type="button"
