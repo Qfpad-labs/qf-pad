@@ -1,5 +1,5 @@
 import { MessageCircle, Sparkles, X, Send, ExternalLink, ArrowRight } from "lucide-react";
-import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAccount as useQfAccount } from "@/lib/papi/hooks";
 import { sendChatMessage } from "@/lib/chat/client";
@@ -235,6 +235,12 @@ export function ChatbotBubble() {
   const [isOpen, setIsOpen] = useState(false);
   const [transcript, setTranscript] = useState<ChatTurn[]>([]);
   const [input, setInput] = useState("");
+  const [mobileViewport, setMobileViewport] = useState({
+    width: 0,
+    height: 0,
+    keyboardInset: 0,
+    keyboardOpen: false,
+  });
   const [sessionId, setSessionId] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
     return window.localStorage.getItem(SESSION_STORAGE_KEY);
@@ -273,12 +279,67 @@ export function ChatbotBubble() {
       activeInlineSignDraft.actionType === "airdrop_tokens" ||
       ["checking_allowance", "approving", "locking", "creating", "sending"].includes(signPhase)
     );
+  const isMobileKeyboardOpen = isOpen && mobileViewport.width > 0 && mobileViewport.width < 768 && mobileViewport.keyboardOpen;
+  const keyboardPanelMaxHeight = Math.max(
+    260,
+    Math.min(
+      mobileViewport.height - 18,
+      isSignFlowExpanded ? 560 : 500,
+    ),
+  );
+  const chatShellStyle: CSSProperties | undefined = isMobileKeyboardOpen
+    ? {
+        bottom: `${Math.max(8, mobileViewport.keyboardInset + 8)}px`,
+      }
+    : undefined;
+  const panelStyle: CSSProperties | undefined = isMobileKeyboardOpen
+    ? {
+        maxHeight: `${keyboardPanelMaxHeight}px`,
+      }
+    : undefined;
 
   useEffect(() => {
     if (!showGuestMode) {
       setGuestHardLocked(false);
     }
   }, [showGuestMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const updateMobileViewport = () => {
+      const visualViewport = window.visualViewport;
+      const layoutHeight = window.innerHeight;
+      const width = window.innerWidth;
+      const height = visualViewport?.height ?? layoutHeight;
+      const keyboardInset = visualViewport
+        ? Math.max(0, layoutHeight - visualViewport.height - visualViewport.offsetTop)
+        : 0;
+      const keyboardOpen =
+        width < 768 &&
+        (keyboardInset > 80 || height < layoutHeight * 0.78);
+
+      setMobileViewport({
+        width,
+        height: Math.round(height),
+        keyboardInset: Math.round(keyboardInset),
+        keyboardOpen,
+      });
+    };
+
+    updateMobileViewport();
+
+    const visualViewport = window.visualViewport;
+    window.addEventListener("resize", updateMobileViewport);
+    visualViewport?.addEventListener("resize", updateMobileViewport);
+    visualViewport?.addEventListener("scroll", updateMobileViewport);
+
+    return () => {
+      window.removeEventListener("resize", updateMobileViewport);
+      visualViewport?.removeEventListener("resize", updateMobileViewport);
+      visualViewport?.removeEventListener("scroll", updateMobileViewport);
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (!lastActionDraft) return;
@@ -444,7 +505,10 @@ export function ChatbotBubble() {
         />
       )}
 
-      <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-[60] flex flex-col items-end gap-3">
+      <div
+        className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-[60] flex flex-col items-end gap-3"
+        style={chatShellStyle}
+      >
         {isOpen && (
           <div
             className={`flex flex-col overflow-hidden rounded-[26px] border-[3px] border-black bg-white text-black shadow-[8px_8px_0_rgba(0,0,0,1)] ${
@@ -452,6 +516,7 @@ export function ChatbotBubble() {
                 ? "w-[min(24rem,calc(100vw-1rem))] max-w-[24rem] sm:w-[28rem] sm:max-w-[28rem]"
                 : "w-[min(20.5rem,calc(100vw-1.5rem))] max-w-[20.5rem] sm:w-[22rem] sm:max-w-[22rem]"
             }`}
+            style={panelStyle}
           >
             <div className="flex shrink-0 items-center justify-between border-b-[3px] border-black bg-[#B8EF53] px-4 py-3">
               <div className="min-w-0">
