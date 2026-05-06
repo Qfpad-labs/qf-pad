@@ -43,6 +43,14 @@ interface LockData {
   formattedAmount: string;
 }
 
+interface LockFormPrefill {
+  token?: string;
+  amount?: string;
+  duration?: string;
+  name?: string;
+  description?: string;
+}
+
 function LockProgressBar({
   lockDate,
   unlockDate,
@@ -256,9 +264,11 @@ function LockCard({
 function CreateLockModal({
   onClose,
   onSuccess,
+  prefill,
 }: {
   onClose: () => void;
   onSuccess: () => void;
+  prefill?: LockFormPrefill | null;
 }) {
   const [searchParams] = useSearchParams();
   const { address } = useAccount();
@@ -280,19 +290,29 @@ function CreateLockModal({
   } = useWriteContract();
 
   // Normalize token address from URL (trim whitespace, ensure lowercase for consistency)
-  const tokenFromUrl = searchParams.get("token")?.trim() ?? "";
-  const amountFromUrl = searchParams.get("amount")?.trim() ?? "";
-  const durationFromUrl = searchParams.get("duration")?.trim() ?? "";
-  const nameFromUrl = searchParams.get("name")?.trim() ?? "";
+  const tokenFromUrl = prefill?.token?.trim() ?? searchParams.get("token")?.trim() ?? "";
+  const amountFromUrl = prefill?.amount?.trim() ?? searchParams.get("amount")?.trim() ?? "";
+  const durationFromUrl = prefill?.duration?.trim() ?? searchParams.get("duration")?.trim() ?? "";
+  const nameFromUrl = prefill?.name?.trim() ?? searchParams.get("name")?.trim() ?? "";
+  const descriptionFromUrl = prefill?.description?.trim() ?? searchParams.get("description")?.trim() ?? "";
   const [tokenAddress, setTokenAddress] = useState(tokenFromUrl);
   const [amount, setAmount] = useState(amountFromUrl);
   const [duration, setDuration] = useState(durationFromUrl);
   const [name, setName] = useState(nameFromUrl);
-  const [description, setDescription] = useState("");
+  const [description, setDescription] = useState(descriptionFromUrl);
   const [hasApproved, setHasApproved] = useState(false);
 
   // Check if token came from URL (dashboard link)
   const cameFromDashboard = !!tokenFromUrl;
+
+  useEffect(() => {
+    setTokenAddress(tokenFromUrl);
+    setAmount(amountFromUrl);
+    setDuration(durationFromUrl);
+    setName(nameFromUrl);
+    setDescription(descriptionFromUrl);
+    setHasApproved(false);
+  }, [tokenFromUrl, amountFromUrl, durationFromUrl, nameFromUrl, descriptionFromUrl]);
 
   // Normalized token address for consistent use across all contract calls
   const normalizedTokenAddress = useMemo(() => {
@@ -877,6 +897,7 @@ export default function TokenLockerPage() {
     null
   );
   const [unlockingId, setUnlockingId] = useState<bigint | null>(null);
+  const [chatbotPrefill, setChatbotPrefill] = useState<LockFormPrefill | null>(null);
 
   const { draft, clearDraft } = useChatbotActionStore();
   useEffect(() => {
@@ -886,11 +907,20 @@ export default function TokenLockerPage() {
       if (draft.prefill.amount) params.set("amount", draft.prefill.amount);
       if (draft.prefill.duration) params.set("duration", draft.prefill.duration);
       if (draft.prefill.name) params.set("name", draft.prefill.name);
+      if (draft.prefill.description) params.set("description", draft.prefill.description);
       setSearchParams(params);
+      setChatbotPrefill({
+        token: draft.prefill.token,
+        amount: draft.prefill.amount,
+        duration: draft.prefill.duration,
+        name: draft.prefill.name,
+        description: draft.prefill.description,
+      });
+
       setShowCreateModal(true);
       clearDraft();
     }
-  }, [draft, clearDraft]);
+  }, [draft, clearDraft, searchParams, setSearchParams]);
 
   const { data: unlockHash, writeContract: unlockTokens } = useWriteContract();
   const { isSuccess: isUnlockSuccess } = useWaitForTransactionReceipt({
@@ -1049,8 +1079,12 @@ export default function TokenLockerPage() {
       {/* Modals */}
       {showCreateModal && (
         <CreateLockModal
-          onClose={() => setShowCreateModal(false)}
+          onClose={() => {
+            setShowCreateModal(false);
+            setChatbotPrefill(null);
+          }}
           onSuccess={refetchLocks}
+          prefill={chatbotPrefill}
         />
       )}
 

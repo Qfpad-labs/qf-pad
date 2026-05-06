@@ -13,12 +13,13 @@ import { TokenFactory } from "@/config";
 import { useChainContracts } from "@/lib/hooks/useChainContracts";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { decodeEventLog, parseUnits } from "viem";
+import { decodeEventLog, parseUnits, type Address } from "viem";
 import { useAccount, useWaitForTransactionReceipt, useWriteContract } from "@/lib/papi/hooks";
 import { Coins, ExternalLink, CheckCircle2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { getFriendlyTxErrorMessage } from "@/lib/utils/tx-errors";
 import { useChatbotActionStore } from "@/lib/store/chatbot-action-store";
+import { contractRead } from "@/lib/papi/contract-read";
 
 const TokenType = {
   Plain: 0,
@@ -45,9 +46,11 @@ export default function CreateTokenPage() {
   const [taxBps, setTaxBps] = useState("0");
 
   const [createdTokenAddress, setCreatedTokenAddress] = useState<string | null>(null);
+  const [tokenCreated, setTokenCreated] = useState(false);
 
   // Track processed hashes to prevent duplicate toasts
   const processedHash = useRef<string | null>(null);
+  const tokensBeforeCreate = useRef<Set<string> | null>(null);
 
   useEffect(() => {
     if (address) {
@@ -68,9 +71,51 @@ export default function CreateTokenPage() {
     }
   }, [draft, clearDraft]);
 
+  const resetForm = () => {
+    setName("");
+    setSymbol("");
+    setDecimals("18");
+    setInitialSupply("1000000");
+    setTaxWallet("");
+    setTaxBps("0");
+  };
+
+  const readCreatedTokens = async () => {
+    if (!address) return [];
+    const tokens = await contractRead({
+      address: tokenFactory,
+      abi: TokenFactory.abi,
+      functionName: "tokensCreatedBy",
+      args: [address],
+    });
+    return Array.isArray(tokens) ? (tokens as Address[]) : [];
+  };
+
+  const findCreatedTokenByReadback = async () => {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const tokens = await readCreatedTokens();
+        const previous = tokensBeforeCreate.current;
+        const created = previous
+          ? tokens.find((token) => !previous.has(token.toLowerCase()))
+          : tokens[tokens.length - 1];
+
+        if (created) return created;
+      } catch (err) {
+        console.warn("Could not read created tokens after token creation", err);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+
+    return null;
+  };
+
   const handleCreateToken = async () => {
     setCreatedTokenAddress(null);
+    setTokenCreated(false);
     processedHash.current = null;
+    tokensBeforeCreate.current = null;
     
     const tokenParams = {
       name,
@@ -110,6 +155,15 @@ export default function CreateTokenPage() {
         return;
     }
 
+    try {
+      const existingTokens = await readCreatedTokens();
+      tokensBeforeCreate.current = new Set(
+        existingTokens.map((token) => token.toLowerCase())
+      );
+    } catch (err) {
+      console.warn("Could not snapshot existing tokens before creation", err);
+    }
+
     writeContract({
       address: tokenFactory,
       abi: TokenFactory.abi,
@@ -132,11 +186,15 @@ export default function CreateTokenPage() {
   }, [error, reset]);
 
   useEffect(() => {
-    if (isConfirmed && createTokenReceipt && processedHash.current !== hash) {
+    const handleConfirmedTokenCreation = async () => {
+      if (!isConfirmed || !createTokenReceipt || processedHash.current === hash) {
+        return;
+      }
+
       processedHash.current = hash ?? null;
-      
-      // NOTE: PAPI receipts don't include EVM logs, so this array may be empty.
-      // When logs are unavailable we skip event decoding and show a generic success.
+
+      // QF receipts may not always surface Solidity logs in the shape viem expects.
+      // Prefer decoded events when available, then fall back to reading factory state.
       const logs = createTokenReceipt.logs ?? [];
       const event = logs
         .map((log: { data: `0x${string}`; topics: [`0x${string}`, ...`0x${string}`[]] }) => {
@@ -153,22 +211,25 @@ export default function CreateTokenPage() {
         })
         .find((decoded) => decoded?.eventName === 'TokenCreated');
 
-      if (event) {
-        const tokenAddress = (event.args as unknown as { token: `0x${string}` }).token;
+      const eventToken = event
+        ? (event.args as unknown as { token: `0x${string}` }).token
+        : null;
+      const tokenAddress = eventToken ?? await findCreatedTokenByReadback();
+
+      setTokenCreated(true);
+      if (tokenAddress) {
         setCreatedTokenAddress(tokenAddress);
         toast.success("Token created successfully!");
-        // Reset form
-        setName("");
-        setSymbol("");
-        setDecimals("18");
-        setInitialSupply("1000000");
-        setTaxWallet("");
-        setTaxBps("0");
-        reset();
       } else {
-        toast.error("Could not find TokenCreated event in transaction logs.");
+        toast.success("Token created successfully. It should appear in your dashboard shortly.");
       }
-    }
+
+      resetForm();
+      reset();
+    };
+
+    void handleConfirmedTokenCreation();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConfirmed, createTokenReceipt, hash, reset]);
 
   return (
@@ -189,7 +250,7 @@ export default function CreateTokenPage() {
       </div>
 
       {/* Success Message */}
-      {createdTokenAddress && (
+      {tokenCreated && (
         <Card className="before:hidden -rotate-[0.35deg] max-w-2xl mx-auto mb-8 border-4 border-black shadow-[4px_4px_0_rgba(0,0,0,1)] p-0 gap-0">
           <CardHeader className="border-b-2 border-black bg-[#90EE90] p-6">
             <CardTitle className="font-black uppercase tracking-wider flex items-center gap-2">
@@ -198,32 +259,49 @@ export default function CreateTokenPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-6 space-y-4">
-            <div>
-              <p className="text-xs text-gray-500 uppercase font-bold mb-1">Token Address</p>
-              <code className="block bg-gray-100 p-3 border-2 border-black font-mono text-sm break-all">
-                {createdTokenAddress}
-              </code>
-            </div>
+            {createdTokenAddress ? (
+              <div>
+                <p className="text-xs text-gray-500 uppercase font-bold mb-1">Token Address</p>
+                <code className="block bg-gray-100 p-3 border-2 border-black font-mono text-sm break-all">
+                  {createdTokenAddress}
+                </code>
+              </div>
+            ) : (
+              <p className="text-sm font-semibold text-gray-700">
+                The transaction finalized. Your token should show in the dashboard shortly.
+              </p>
+            )}
             <div className="flex flex-col sm:flex-row gap-3">
-              <a 
-                href={`${explorerUrl}/address/${createdTokenAddress}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-1"
-              >
-                <Button className="-rotate-[0.3deg] w-full border-4 border-black bg-white text-black font-black uppercase tracking-wider shadow-[3px_3px_0_rgba(0,0,0,1)] hover:bg-gray-100">
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  View on Explorer
-                </Button>
-              </a>
-              <Link to={`/dashboard/tools/token-locker?token=${createdTokenAddress}`} className="flex-1">
+              {createdTokenAddress ? (
+                <a 
+                  href={`${explorerUrl}/address/${createdTokenAddress}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1"
+                >
+                  <Button className="-rotate-[0.3deg] w-full border-4 border-black bg-white text-black font-black uppercase tracking-wider shadow-[3px_3px_0_rgba(0,0,0,1)] hover:bg-gray-100">
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    View on Explorer
+                  </Button>
+                </a>
+              ) : (
+                <Link to="/dashboard/user" className="flex-1">
+                  <Button className="-rotate-[0.3deg] w-full border-4 border-black bg-white text-black font-black uppercase tracking-wider shadow-[3px_3px_0_rgba(0,0,0,1)] hover:bg-gray-100">
+                    View Dashboard
+                  </Button>
+                </Link>
+              )}
+              {createdTokenAddress && <Link to={`/dashboard/tools/token-locker?token=${createdTokenAddress}`} className="flex-1">
                 <Button className="rotate-[0.3deg] w-full border-4 border-black bg-[#FFE38A] text-black font-black uppercase tracking-wider shadow-[3px_3px_0_rgba(0,0,0,1)] hover:bg-[#F6CF62]">
                   Lock Tokens
                 </Button>
-              </Link>
+              </Link>}
             </div>
             <Button 
-              onClick={() => setCreatedTokenAddress(null)}
+              onClick={() => {
+                setCreatedTokenAddress(null);
+                setTokenCreated(false);
+              }}
               variant="outline"
               className="w-full border-2 border-black"
             >
@@ -234,7 +312,7 @@ export default function CreateTokenPage() {
       )}
 
       {/* Create Token Form */}
-      {!createdTokenAddress && (
+      {!tokenCreated && (
         <Card className="before:hidden rotate-[0.35deg] max-w-2xl mx-auto border-4 border-black shadow-[4px_4px_0_rgba(0,0,0,1)] p-0 gap-0">
           <CardHeader className="border-b-2 border-black bg-white p-6">
             <CardTitle className="font-black uppercase tracking-wider">Token Details</CardTitle>

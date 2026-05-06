@@ -24,6 +24,7 @@ interface WalletAccount {
   address: Address; // Derived EVM 0x address
   displayName: string;
   polkadotSigner: PolkadotSigner;
+  pjsSigner: unknown;
 }
 
 type H160Like = {
@@ -275,6 +276,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       address: evmAddress,
       displayName: selectedAccount.name ?? "Account",
       polkadotSigner: selectedAccount.polkadotSigner,
+      pjsSigner: selectedAccount.pjsSigner,
     };
   }, [selectedAccount, evmAddress]);
 

@@ -9,7 +9,7 @@ import {
   Download,
   User,
 } from "lucide-react";
-import type { InjectedPolkadotAccount } from "polkadot-api/pjs-signer";
+import type { InjectedPolkadotAccount } from "@/lib/papi/injected-extensions";
 import { getWallets, getWalletBySource, type Wallet } from "@talismn/connect-wallets";
 
 function truncateAddress(addr: string, chars = 6): string {

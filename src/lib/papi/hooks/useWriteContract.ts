@@ -108,6 +108,7 @@ export function useWriteContract() {
           args: params.args,
           value: params.value,
           signer: account.polkadotSigner,
+          pjsSigner: account.pjsSigner,
           ss58Address: account.ss58Address,
         });
 

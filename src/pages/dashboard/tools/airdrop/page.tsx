@@ -26,6 +26,7 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
+import { useChatbotActionStore } from "@/lib/store/chatbot-action-store";
 
 export default function AirdropPage() {
   const [searchParams] = useSearchParams();
@@ -54,6 +55,20 @@ export default function AirdropPage() {
   const [sendType, setSendType] = useState<"erc20" | "react">(
     tokenFromUrl ? "erc20" : "react"
   );
+  const { draft, clearDraft } = useChatbotActionStore();
+
+  useEffect(() => {
+    if (draft?.actionType === "airdrop_tokens" && draft.prefill) {
+      if (draft.prefill.token) {
+        setTokenAddress(draft.prefill.token);
+        setSendType("erc20");
+      }
+      if (draft.prefill.recipientsData) {
+        setRecipientsData(draft.prefill.recipientsData);
+      }
+      clearDraft();
+    }
+  }, [clearDraft, draft]);
 
   // Normalize token address
   const normalizedTokenAddress = useMemo(() => {

@@ -1,6 +1,7 @@
 import type { PolkadotSigner } from "polkadot-api";
 import { typedApi } from "./client";
 import { signAndSubmitWithRetry } from "./sign-retry";
+import { getQfPolkadotApi, submitTxAndWait } from "./polkadot-submit";
 
 const MAPPED_KEY_PREFIX = "qfpad:mapped:";
 
@@ -83,7 +84,8 @@ async function isMappedOnChain(ss58Address: string): Promise<boolean> {
  */
 export async function ensureMapped(
   signer: PolkadotSigner,
-  ss58Address: string
+  ss58Address: string,
+  pjsSigner?: unknown
 ): Promise<void> {
   if (ss58Address.startsWith("0x")) {
     throw new Error(
@@ -106,9 +108,23 @@ export async function ensureMapped(
   }
 
   try {
-    const result = await signAndSubmitWithRetry(() =>
-      typedApi.tx.Revive.map_account().signAndSubmit(signer)
-    );
+    let result: { ok: boolean; dispatchError?: unknown };
+
+    if (pjsSigner) {
+      const api = await getQfPolkadotApi();
+      result = await submitTxAndWait({
+          api,
+          signerAddress: ss58Address,
+          signer: pjsSigner,
+          tx: api.tx.revive.mapAccount(),
+          label: "revive.mapAccount",
+          timeoutMs: 120000,
+        });
+    } else {
+      result = await signAndSubmitWithRetry(() =>
+        typedApi.tx.Revive.map_account().signAndSubmit(signer)
+      );
+    }
 
     if (result.ok || isAlreadyMappedDispatchError(result.dispatchError)) {
       storage?.setItem(cacheKey, "true");

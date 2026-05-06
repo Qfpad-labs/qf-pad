@@ -1,19 +1,65 @@
 import { MessageCircle, Sparkles, X, Send, ExternalLink, ArrowRight } from "lucide-react";
-import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAccount as useQfAccount } from "@/lib/papi/hooks";
 import { sendChatMessage } from "@/lib/chat/client";
 import { useChatbotActionStore } from "@/lib/store/chatbot-action-store";
+import { useChatbotTxStore } from "@/lib/store/chatbot-tx-store";
 import type { ActionDraft, ChatTurn } from "@/lib/chat/types";
 import { useAccount as useEvmAccount } from "wagmi";
+import { InlineSignPanel, isInlineSignableDraft } from "./inline-sign-panel";
 
 const SESSION_STORAGE_KEY = "qfpad:chat:session";
 const QUICK_ACTIONS = [
   "Create a token for me",
+  "Airdrop some tokens for me",
   "Create a presale for me",
   "Lock some tokens for me",
   "Help me buy QPAD",
   "How do I claim QPAD?",
+];
+
+function isLockRetryPrompt(message: string) {
+  const normalized = message.trim().toLowerCase();
+
+  return (
+    /^(yes|yeah|yep|yup|sure|okay|ok|go ahead|do it|retry|sign now|try again)$/i.test(normalized) ||
+    /\b(try|sign|lock)\b.*\bagain\b/i.test(normalized) ||
+    /\bretry\b/i.test(normalized)
+  );
+}
+
+const QUINN_GREETINGS = [
+  "Hey there, Quinn at your service.",
+  "Hi — Quinn. What's up?",
+  "Hey, Quinn here. What's good?",
+  "Hi, I'm Quinn.",
+  "Hey there. Quinn here.",
+  "Quinn here. Welcome aboard.",
+  "Hey there, champ.",
+  "What's up, chad?",
+  "Hey hey, friendo.",
+  "Hey there, hero.",
+  "Yo, fren. Quinn here.",
+  "Gm fren. Quinn here.",
+  "Wagmi. Quinn at your service.",
+  "Gm ser. Quinn online.",
+  "Yo anon. Quinn here.",
+  "Lfg — Quinn reporting in.",
+  "Hey degen. Quinn here.",
+  "Gm gm. Quinn around.",
+  "Bullish on questions. Quinn here.",
+  "Hodl tight. Quinn's online.",
+  "Stay frosty, anon. Quinn here.",
+  "Hey — Quinn here. The presale isn't going to ape itself.",
+  "Hi, Quinn. Charts loading, vibes pending.",
+  "Quinn here. The mempool's quiet today.",
+  "Hi, Quinn. Wallet ready, snacks optional.",
+  "Hey, Quinn. Gas fees can't catch us today.",
+  "Hey, Quinn. Did someone say liquidity?",
+  "Quinn here. Wallets up.",
+  "Hi, Quinn. Hands off the seed phrase.",
+  "Hey, Quinn here. Tap in.",
 ];
 
 function formatCitationLabel(url: string) {
@@ -196,11 +242,60 @@ export function ChatbotBubble() {
   const [isLoading, setIsLoading] = useState(false);
   const [lastActionDraft, setLastActionDraft] = useState<ActionDraft | null>(null);
   const [lastCitations, setLastCitations] = useState<string[]>([]);
+  const [guestHardLocked, setGuestHardLocked] = useState(false);
+  const [welcomeGreeting] = useState(
+    () => QUINN_GREETINGS[Math.floor(Math.random() * QUINN_GREETINGS.length)],
+  );
+  const [isSlashMenuOpen, setIsSlashMenuOpen] = useState(false);
+  const slashMenuRef = useRef<HTMLDivElement>(null);
+  const [idlePlaceholder] = useState(() =>
+    Math.random() < 0.5 ? "Ask Quinn a question ..." : "Press / for quick actions",
+  );
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { address: qfMappedAddress, ss58Address } = useQfAccount();
   const { address: evmAddress } = useEvmAccount();
+  const {
+    draft: activeSignDraft,
+    phase: signPhase,
+    setDraft: setActiveSignDraft,
+    requestSignAttempt,
+  } = useChatbotTxStore();
+  const showGuestMode = useMemo(
+    () => !(evmAddress || qfMappedAddress || ss58Address),
+    [evmAddress, qfMappedAddress, ss58Address],
+  );
+  const activeInlineSignDraft = isInlineSignableDraft(activeSignDraft) ? activeSignDraft : null;
+  const isSignFlowExpanded =
+    activeInlineSignDraft !== null &&
+    (
+      activeInlineSignDraft.actionType === "airdrop_tokens" ||
+      ["checking_allowance", "approving", "locking", "creating", "sending"].includes(signPhase)
+    );
+
+  useEffect(() => {
+    if (!showGuestMode) {
+      setGuestHardLocked(false);
+    }
+  }, [showGuestMode]);
+
+  useEffect(() => {
+    if (!lastActionDraft) return;
+
+    if (isInlineSignableDraft(lastActionDraft)) {
+      setActiveSignDraft(lastActionDraft);
+      return;
+    }
+
+    setActiveSignDraft(null);
+  }, [lastActionDraft, setActiveSignDraft]);
+
+  const isGuestLocked = showGuestMode && guestHardLocked;
+
+  const appendAssistantMessage = (content: string) => {
+    setTranscript((previous) => [...previous, { role: "assistant", content }]);
+  };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -213,10 +308,12 @@ export function ChatbotBubble() {
   }, [sessionId]);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [transcript, isLoading]);
+    const node = scrollRef.current;
+    if (!node) return;
+    requestAnimationFrame(() => {
+      node.scrollTop = node.scrollHeight;
+    });
+  }, [transcript, isLoading, activeInlineSignDraft]);
 
   useEffect(() => {
     if (isOpen && inputRef.current) {
@@ -224,9 +321,32 @@ export function ChatbotBubble() {
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isSlashMenuOpen) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (slashMenuRef.current && !slashMenuRef.current.contains(event.target as Node)) {
+        setIsSlashMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isSlashMenuOpen]);
+
   const pushPrompt = async (prompt?: string) => {
     const trimmed = (prompt ?? input).trim();
-    if (!trimmed || isLoading) return;
+    if (!trimmed || isLoading || isGuestLocked) return;
+
+    if (
+      activeInlineSignDraft &&
+      signPhase !== "success" &&
+      isLockRetryPrompt(trimmed)
+    ) {
+      const userTurn: ChatTurn = { role: "user", content: trimmed };
+      setTranscript((previous) => [...previous, userTurn]);
+      setInput("");
+      requestSignAttempt();
+      return;
+    }
 
     const userTurn: ChatTurn = { role: "user", content: trimmed };
     const messages = [...transcript, userTurn];
@@ -256,6 +376,10 @@ export function ChatbotBubble() {
 
       setLastActionDraft(response.actionDraft);
       setLastCitations(response.citations);
+
+      if (response.blockReason === "guest_limit_hard") {
+        setGuestHardLocked(true);
+      }
     } catch (error) {
       const message =
         error instanceof Error && error.message
@@ -279,7 +403,22 @@ export function ChatbotBubble() {
     await pushPrompt(prompt);
   };
 
+  const handlePickQuickAction = (prompt: string) => {
+    setIsSlashMenuOpen(false);
+    void handleQuickAction(prompt);
+  };
+
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Escape" && isSlashMenuOpen) {
+      event.preventDefault();
+      setIsSlashMenuOpen(false);
+      return;
+    }
+    if (event.key === "/" && input === "" && !isGuestLocked) {
+      event.preventDefault();
+      setIsSlashMenuOpen(true);
+      return;
+    }
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       void handleSend();
@@ -307,7 +446,13 @@ export function ChatbotBubble() {
 
       <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-3">
         {isOpen && (
-          <div className="flex w-[min(20.5rem,calc(100vw-1.5rem))] max-w-[20.5rem] flex-col overflow-hidden rounded-[26px] border-[3px] border-black bg-white text-black shadow-[8px_8px_0_rgba(0,0,0,1)] sm:w-[22rem] sm:max-w-[22rem]">
+          <div
+            className={`flex flex-col overflow-hidden rounded-[26px] border-[3px] border-black bg-white text-black shadow-[8px_8px_0_rgba(0,0,0,1)] ${
+              isSignFlowExpanded
+                ? "w-[min(24rem,calc(100vw-1rem))] max-w-[24rem] sm:w-[28rem] sm:max-w-[28rem]"
+                : "w-[min(20.5rem,calc(100vw-1.5rem))] max-w-[20.5rem] sm:w-[22rem] sm:max-w-[22rem]"
+            }`}
+          >
             <div className="flex shrink-0 items-center justify-between border-b-[3px] border-black bg-[#B8EF53] px-4 py-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
@@ -318,7 +463,7 @@ export function ChatbotBubble() {
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="inline-flex h-8 w-8 items-center justify-center border-[2px] border-black bg-white text-black shadow-[2px_2px_0_rgba(0,0,0,1)] transition-transform hover:-translate-y-0.5"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border-[2px] border-black bg-white text-black shadow-[2px_2px_0_rgba(0,0,0,1)] transition-transform hover:-translate-y-0.5"
                 aria-label="Close chatbot"
               >
                 <X className="h-4 w-4" />
@@ -327,17 +472,22 @@ export function ChatbotBubble() {
 
             <div
               ref={scrollRef}
-              className="max-h-[min(62vh,28rem)] min-h-[13rem] flex-1 overflow-y-auto px-3 py-3 sm:px-4"
+              className={`min-h-[13rem] flex-1 overflow-y-auto px-3 py-3 sm:px-4 ${
+                isSignFlowExpanded ? "max-h-[min(72vh,34rem)]" : "max-h-[min(62vh,28rem)]"
+              }`}
             >
               {!hasMessages && !isLoading && (
                 <div className="space-y-3">
-                  <p className="text-sm font-bold leading-6">
-                    Agent Quinn at your service. No relation to Harley. Fewer bats, more launchpads.
-                  </p>
+                  <p className="text-sm font-bold leading-6">{welcomeGreeting}</p>
                   <div className="rounded-[18px] border-[2px] border-black bg-[#FFF2D5] px-3 py-3">
                     <p className="text-sm font-bold leading-5">
                       Ask me any QFPad question. I can help with QPAD sale issues and tee up actions when you want something set up.
                     </p>
+                    {showGuestMode && (
+                      <p className="mt-2 text-xs font-bold uppercase tracking-[0.12em] text-black/55">
+                        Guest mode: 5 prompts
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <p className="text-[11px] font-black uppercase tracking-[0.12em] text-black/55">
@@ -368,16 +518,52 @@ export function ChatbotBubble() {
                       role={message.role}
                       content={message.content}
                       citations={isLast && message.role === "assistant" ? lastCitations : undefined}
-                      actionDraft={isLast && message.role === "assistant" ? lastActionDraft : null}
+                      actionDraft={
+                        isLast &&
+                        message.role === "assistant" &&
+                        !isInlineSignableDraft(lastActionDraft)
+                          ? lastActionDraft
+                          : null
+                      }
                       isLoading={isLast && message.role === "assistant" && isLoading}
                       onActionClose={() => setIsOpen(false)}
                     />
                   );
                 })}
               </div>
+
+              {activeInlineSignDraft && (
+                <InlineSignPanel
+                  draft={activeInlineSignDraft}
+                  onAppendAssistantMessage={appendAssistantMessage}
+                />
+              )}
             </div>
 
-            <div className="shrink-0 border-t-[3px] border-black bg-gray-50 px-3 py-3">
+            <div className="relative shrink-0 border-t-[3px] border-black bg-gray-50 px-3 py-3">
+              {isSlashMenuOpen && (
+                <div
+                  ref={slashMenuRef}
+                  className="absolute bottom-full left-3 right-3 mb-2 overflow-hidden rounded-[14px] border-[2px] border-black bg-white shadow-[4px_4px_0_rgba(0,0,0,1)]"
+                >
+                  <p className="border-b-[2px] border-black bg-[#FFF2D5] px-3 py-2 text-[10px] font-black uppercase tracking-[0.12em] text-black/60">
+                    Quick actions
+                  </p>
+                  <div className="flex flex-col">
+                    {QUICK_ACTIONS.map((action) => (
+                      <button
+                        key={action}
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => handlePickQuickAction(action)}
+                        className="border-b border-black/10 px-3 py-2 text-left text-xs font-bold last:border-b-0 hover:bg-gray-100"
+                      >
+                        {action}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="flex gap-2">
                 <input
                   ref={inputRef}
@@ -385,21 +571,26 @@ export function ChatbotBubble() {
                   value={input}
                   onChange={(event) => setInput(event.target.value.slice(0, 600))}
                   onKeyDown={handleKeyDown}
-                  placeholder="Ask a QFPad question..."
-                  disabled={isLoading}
+                  placeholder={isGuestLocked ? "Connect a wallet to keep chatting" : idlePlaceholder}
+                  disabled={isLoading || isGuestLocked}
                   maxLength={600}
-                  className="flex-1 border-[2px] border-black px-3 py-2 text-sm font-bold placeholder:text-black/35 focus:outline-none disabled:opacity-50"
+                  className="flex-1 rounded-full border-[2px] border-black px-4 py-2 text-sm font-bold placeholder:text-black/35 focus:outline-none disabled:opacity-50"
                 />
                 <button
                   type="button"
                   onClick={() => void handleSend()}
-                  disabled={!input.trim() || isLoading}
-                  className="inline-flex h-10 w-10 items-center justify-center border-[2px] border-black bg-[#42C9FF] text-black shadow-[2px_2px_0_rgba(0,0,0,1)] transition-transform hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
+                  disabled={!input.trim() || isLoading || isGuestLocked}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border-[2px] border-black bg-[#42C9FF] text-black shadow-[2px_2px_0_rgba(0,0,0,1)] transition-transform hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
                   aria-label="Send message"
                 >
                   {isLoading ? <TypingDots /> : <Send className="h-4 w-4" />}
                 </button>
               </div>
+              {isGuestLocked && (
+                <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.12em] text-black/55">
+                  Guest cap reached — connect a wallet to continue
+                </p>
+              )}
             </div>
           </div>
         )}

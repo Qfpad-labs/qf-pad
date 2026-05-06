@@ -6,7 +6,7 @@ import {
 import { Binary, FixedSizeBinary, type PolkadotSigner } from "polkadot-api";
 import { typedApi } from "./client";
 import { ensureMapped } from "./map-account";
-import { signAndSubmitWithRetry } from "./sign-retry";
+import { getQfPolkadotApi, submitTxAndWait } from "./polkadot-submit";
 
 function collectErrorText(input: unknown): string {
   if (input == null) return "";
@@ -65,6 +65,7 @@ export async function contractWrite({
   args = [],
   value = 0n,
   signer,
+  pjsSigner,
   ss58Address,
 }: {
   address: Address;
@@ -73,12 +74,16 @@ export async function contractWrite({
   args?: unknown[];
   value?: bigint;
   signer: PolkadotSigner;
+  pjsSigner?: unknown;
   ss58Address: string;
 }): Promise<{ txHash: string; ok: boolean; events: unknown[] }> {
   if (ss58Address.startsWith("0x")) {
     throw new Error(
       "QF contract writes require a Substrate SS58 account. Select a Polkadot account in Talisman/SubWallet, not an Ethereum account."
     );
+  }
+  if (!pjsSigner) {
+    throw new Error("QF contract writes require the injected wallet signer. Reconnect your QF wallet and retry.");
   }
 
   // 1. Encode calldata
@@ -92,7 +97,7 @@ export async function contractWrite({
   const inputData = Binary.fromHex(calldata);
 
   // 2. Ensure account mapping
-  await ensureMapped(signer, ss58Address);
+  await ensureMapped(signer, ss58Address, pjsSigner);
 
   // 3. Dry-run for gas estimation
   const dryRunResult = await typedApi.apis.ReviveApi.call(
@@ -139,23 +144,24 @@ export async function contractWrite({
     }
   }
 
-  // 4. Submit the transaction. Wrapped in retry to swallow Talisman's
-  // intermittent BadProof — each attempt rebuilds a fresh payload.
-  const result = await signAndSubmitWithRetry(() =>
-    typedApi.tx.Revive.call({
-      dest,
+  // 4. Submit the transaction through @polkadot/api, matching the working
+  // deployment scripts. The explicit withSignedTransaction=false option avoids
+  // QF's CheckMetadataHash incompatibility in extension wallets.
+  const api = await getQfPolkadotApi();
+  const result = await submitTxAndWait({
+    api,
+    signerAddress: ss58Address,
+    signer: pjsSigner,
+    tx: api.tx.revive.call(
+      address,
       value,
-      gas_limit: gasLimit,
-      storage_deposit_limit: storageDeposit,
-      data: inputData,
-    }).signAndSubmit(signer)
-  );
-
-  if (!result.ok) {
-    throw new Error(
-      `Revive.call failed: ${formatDispatchError(result.dispatchError)}`
-    );
-  }
+      gasLimit,
+      storageDeposit,
+      calldata,
+    ),
+    label: `${functionName} call`,
+    timeoutMs: 180000,
+  });
 
   return {
     txHash: result.txHash,

@@ -24,8 +24,11 @@ export interface ChatRequest {
   evmAddress?: string;
 }
 
+export type ChatBlockReason = "guard" | "guest_limit_soft" | "guest_limit_hard";
+
 export interface ChatResponse {
   blocked: boolean;
+  blockReason?: ChatBlockReason;
   sessionId: string | null;
   model?: string;
   answer: string;

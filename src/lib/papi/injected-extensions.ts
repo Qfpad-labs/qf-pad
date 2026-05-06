@@ -1,8 +1,8 @@
 import {
   type KeypairType,
   type InjectedAccount,
-  type InjectedExtension,
-  type InjectedPolkadotAccount,
+  type InjectedExtension as PapiInjectedExtension,
+  type InjectedPolkadotAccount as PapiInjectedPolkadotAccount,
   type SignPayload,
   type SignRaw,
   type SignerPayloadJSON,
@@ -42,6 +42,15 @@ interface PjsInjectedExtension {
     subscribe: (cb: (accounts: InjectedAccount[]) => void) => () => void;
   };
 }
+
+export type InjectedPolkadotAccount = PapiInjectedPolkadotAccount & {
+  pjsSigner: PjsInjectedExtension["signer"];
+};
+
+export type InjectedExtension = Omit<PapiInjectedExtension, "getAccounts" | "subscribe"> & {
+  getAccounts: () => InjectedPolkadotAccount[];
+  subscribe: (cb: (accounts: InjectedPolkadotAccount[]) => void) => () => void;
+};
 
 type MaybeEthereumKeypairType = KeypairType | "ethereum";
 type SigningType = "Ed25519" | "Sr25519" | "Ecdsa";
@@ -253,6 +262,7 @@ export const connectInjectedExtension = async (
       .filter(({ type }) => supportedAccountTypes.has(type ?? ""))
       .map((account) => ({
         ...account,
+        pjsSigner: enabledExtension.signer,
         polkadotSigner: getPolkadotSignerFromPjsTyped(
           account.address,
           signPayload,
@@ -285,5 +295,3 @@ export const connectInjectedExtension = async (
 
 export const getInjectedExtensions = (): string[] =>
   window.injectedWeb3 ? Object.keys(window.injectedWeb3) : [];
-
-export type { InjectedExtension, InjectedPolkadotAccount };
