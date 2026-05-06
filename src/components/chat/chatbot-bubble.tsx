@@ -377,7 +377,9 @@ export function ChatbotBubble() {
   }, [transcript, isLoading, activeInlineSignDraft]);
 
   useEffect(() => {
-    if (isOpen && inputRef.current) {
+    const isMobileViewport = typeof window !== "undefined" && window.innerWidth < 768;
+
+    if (isOpen && inputRef.current && !isMobileViewport) {
       inputRef.current.focus();
     }
   }, [isOpen]);
