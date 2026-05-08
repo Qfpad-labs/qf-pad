@@ -48,7 +48,7 @@ export const QPAD_MAINNET_SALE: QpadExternalSaleConfig = {
   claimVaultAddress: QPAD_CLAIM_VAULT_ADDRESS,
   name: "QFPAD",
   symbol: "QPAD",
-  description: "Secure your allocation with USDC on Ethereum, then claim your QPAD on QF Network.",
+  description: "QPAD presale closed. Refunds have been sent — participants should check their wallets.",
   startTime: QPAD_START_TIME,
   endTime: QPAD_END_TIME,
   rateLabel: "1 USDC = 225 QPAD",
@@ -102,7 +102,7 @@ export function getQpadStaticPresale(nowMs: number, saleState?: QpadStaticPresal
     paymentTokenName: "USD Coin",
     paymentTokenDecimals: 6,
     category: "infrastructure",
-    description: "Secure your allocation with USDC on Ethereum, then claim your QPAD on QF Network.",
+    description: "QPAD presale closed. Refunds have been sent — participants should check their wallets.",
     logo: "/qfpad-logo.png",
     socials: {
       twitter: "https://x.com/qfpad_",

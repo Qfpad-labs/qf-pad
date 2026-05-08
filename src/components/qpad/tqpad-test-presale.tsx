@@ -1,6 +1,5 @@
 "use client";
 
-import confetti from "canvas-confetti";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AccountId } from "@polkadot-api/substrate-bindings";
 import {
@@ -14,7 +13,6 @@ import {
   parseUnits,
   toHex,
   type Address,
-  type Abi,
   type Hex,
 } from "viem";
 import { mainnet } from "viem/chains";
@@ -27,19 +25,15 @@ import {
   useSwitchChain,
   useWriteContract as useEvmWriteContract,
 } from "wagmi";
-import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import qpadFiestaBanner from "@/assets/QPAD fiesta.png";
 import type { QpadExternalSaleConfig } from "@/config/static-presales";
 import {
   useAccount as useQfAccount,
-  useReadContracts as useQfReadContracts,
-  useWriteContract as useQfWriteContract,
 } from "@/lib/papi/hooks";
 import { getFriendlyTxErrorMessage } from "@/lib/utils/tx-errors";
 import {
@@ -71,17 +65,6 @@ const qpadPresaleAbi = parseAbi([
   "function saleConfig() view returns (uint64 startTime,uint64 endTime,uint256 qpadPerUsdc,uint256 qpadForSale,uint256 softCap,uint256 hardCap,uint256 minPurchase,uint256 maxPurchase)",
 ]);
 
-const qpadClaimVaultAbi = parseAbi([
-  "function claim()",
-  "function claimFor(address recipient)",
-  "function claimsEnabled() view returns (bool)",
-  "function claimableNow(address recipient) view returns (uint256)",
-  "function claimed(address recipient) view returns (uint256)",
-  "function totalAllocated() view returns (uint256)",
-  "function totalClaimed() view returns (uint256)",
-  "function maxTotalAllocation() view returns (uint256)",
-]);
-
 interface SaleState {
   isSaleOpen: boolean;
   totalRaised: bigint;
@@ -91,13 +74,6 @@ interface SaleState {
   buyerQpad: bigint;
   usdcBalance: bigint;
   usdcAllowance: bigint;
-}
-
-interface QfReadCall {
-  abi: Abi | readonly unknown[];
-  address: Address;
-  functionName: string;
-  args?: unknown[];
 }
 
 type PurchaseTrackerStage =
@@ -144,17 +120,6 @@ function formatAmount(value: bigint, decimals: number, maxFractionDigits = 2) {
   return formatted.toLocaleString(undefined, {
     maximumFractionDigits: maxFractionDigits,
   });
-}
-
-function formatCountdown(targetTimestamp: bigint, nowMs: number) {
-  const remainingMs = Math.max(0, Number(targetTimestamp) * 1000 - nowMs);
-  const totalSeconds = Math.floor(remainingMs / 1000);
-  const days = Math.floor(totalSeconds / 86400);
-  const hours = Math.floor((totalSeconds % 86400) / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  return `${days}D ${hours}H ${minutes}M ${seconds}S`;
 }
 
 function toQfAccountId32(ss58Address: string | undefined): Hex | undefined {
@@ -204,7 +169,6 @@ function getTrackerStage(status: QpadPurchaseStatusResponse["status"], found: bo
 
 export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) {
   const { address: connectedQfMappedRecipient, ss58Address: connectedSs58Address } = useQfAccount();
-  const { writeContractAsync, isPending: isClaimPending, error: claimError } = useQfWriteContract();
   const { address: ethAccount, isConnected: isEvmConnected } = useEvmAccount();
   const ethChainId = useEvmChainId();
   const { openConnectModal: openEvmConnectModal } = useEvmConnectModal();
@@ -214,13 +178,11 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
 
   const [amount, setAmount] = useState("");
   const [manualQfAddress, setManualQfAddress] = useState("");
-  const [nowMs, setNowMs] = useState(() => Date.now());
   const [saleState, setSaleState] = useState<SaleState>(emptySaleState);
   const [isApproving, setIsApproving] = useState(false);
   const [isBuying, setIsBuying] = useState(false);
   const [trackedPurchase, setTrackedPurchase] = useState<PurchaseTracker | null>(null);
-  const [isFiestaOpen, setIsFiestaOpen] = useState(false);
-  const [hasDismissedFiesta, setHasDismissedFiesta] = useState(false);
+  const isParticipationClosed = true;
 
   const manualQfAddressTrimmed = manualQfAddress.trim();
   const manualQfRecipient = useMemo(
@@ -230,44 +192,12 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
   const manualQfError = manualQfAddressTrimmed && !manualQfRecipient ? "Enter a valid QF address." : null;
   const qfMappedRecipient = connectedQfMappedRecipient ?? manualQfRecipient?.mappedRecipient;
   const qfAccountId32 = connectedSs58Address ? toQfAccountId32(connectedSs58Address) : manualQfRecipient?.accountId32;
-  const hasConnectedQfWallet = !!connectedQfMappedRecipient;
   const hasQfRecipient = !!qfMappedRecipient && !!qfAccountId32;
   const amountRaw = useMemo(() => getAmountRaw(amount), [amount]);
   const expectedQpad = useMemo(() => (amountRaw * 225n * 10n ** 18n) / USDC_UNIT, [amountRaw]);
-  const saleCountdown = useMemo(() => formatCountdown(sale.endTime, nowMs), [sale.endTime, nowMs]);
   const progress = saleState.totalRaised > 0n
     ? Math.min(Number((saleState.totalRaised * 10000n) / (40_000n * USDC_UNIT)) / 100, 100)
     : 0;
-
-  const qfContracts = useMemo(() => {
-    const contracts: QfReadCall[] = [];
-
-    if (qfMappedRecipient) {
-      contracts.push(
-        { abi: qpadClaimVaultAbi, address: sale.claimVaultAddress, functionName: "claimsEnabled" },
-        { abi: qpadClaimVaultAbi, address: sale.claimVaultAddress, functionName: "claimableNow", args: [qfMappedRecipient] },
-        { abi: qpadClaimVaultAbi, address: sale.claimVaultAddress, functionName: "claimed", args: [qfMappedRecipient] },
-        { abi: erc20Abi, address: sale.qfTokenAddress, functionName: "balanceOf", args: [qfMappedRecipient] },
-      );
-    }
-
-    return contracts;
-  }, [qfMappedRecipient, sale.claimVaultAddress, sale.qfTokenAddress]);
-
-  const { data: qfReadResults, refetch: refetchQfState } = useQfReadContracts({
-    contracts: qfContracts,
-    query: {
-      enabled: qfContracts.length > 0,
-      refetchInterval: 10_000,
-      refetchOnWindowFocus: true,
-      refetchOnReconnect: true,
-    },
-  });
-
-  const claimsEnabled = qfMappedRecipient ? ((qfReadResults?.[0]?.result as boolean | undefined) ?? false) : false;
-  const claimableNow = qfMappedRecipient ? ((qfReadResults?.[1]?.result as bigint | undefined) ?? 0n) : 0n;
-  const claimedByRecipient = qfMappedRecipient ? ((qfReadResults?.[2]?.result as bigint | undefined) ?? 0n) : 0n;
-  const recipientQpadBalance = qfMappedRecipient ? ((qfReadResults?.[3]?.result as bigint | undefined) ?? 0n) : 0n;
 
   const refreshSaleState = useCallback(async (account?: Address) => {
     try {
@@ -311,70 +241,6 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
   useEffect(() => {
     void refreshSaleState(ethAccount);
   }, [ethAccount, refreshSaleState]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    const timeout = window.setTimeout(() => setIsFiestaOpen(true), 360);
-    return () => window.clearTimeout(timeout);
-  }, []);
-
-  useEffect(() => {
-    if (!isFiestaOpen) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-
-    const timeout = window.setTimeout(() => {
-      const colors = ["#B8EF53", "#42C9FF", "#FF7F41", "#F95D9B", "#FFFFFF"];
-      void confetti({
-        particleCount: 70,
-        angle: 60,
-        spread: 68,
-        origin: { x: 0.12, y: 0.24 },
-        colors,
-      });
-      void confetti({
-        particleCount: 70,
-        angle: 120,
-        spread: 68,
-        origin: { x: 0.88, y: 0.24 },
-        colors,
-      });
-    }, 560);
-
-    return () => window.clearTimeout(timeout);
-  }, [isFiestaOpen]);
-
-  useEffect(() => {
-    if (!isFiestaOpen) return;
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsFiestaOpen(false);
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isFiestaOpen]);
-
-  useEffect(() => {
-    if (!isFiestaOpen) return;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [isFiestaOpen]);
-
-  const handleCloseFiesta = useCallback(() => {
-    setIsFiestaOpen(false);
-    setHasDismissedFiesta(true);
-  }, []);
 
   const refreshPurchaseTracking = useCallback(async (txHash: Hex) => {
     const currentBlock = await ethereumClient.getBlockNumber();
@@ -455,7 +321,6 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
 
       if (shouldToastRegistered) {
         toast.success("QPAD allocation registered.");
-        await refetchQfState();
         await refreshSaleState(ethAccount);
       }
     } catch (error) {
@@ -468,7 +333,7 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
           }
         : previous);
     }
-  }, [ethAccount, refetchQfState, refreshSaleState, sale.presaleAddress, sale.symbol, trackedPurchase?.stage, trackedPurchase?.txHash]);
+  }, [ethAccount, refreshSaleState, sale.presaleAddress, trackedPurchase?.stage, trackedPurchase?.txHash]);
 
   useEffect(() => {
     if (!trackedPurchase || trackedPurchase.stage === "registered" || trackedPurchase.stage === "failed") return;
@@ -523,6 +388,7 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
   const inputError = useMemo(() => getInputError(amountRaw, saleState), [amountRaw, saleState]);
   const needsApproval = amountRaw > 0n && saleState.usdcAllowance < amountRaw;
   const canSubmit =
+    !isParticipationClosed &&
     saleState.isSaleOpen &&
     !!ethAccount &&
     ethChainId === mainnet.id &&
@@ -579,50 +445,26 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
       toast.success("QPAD purchase confirmed on Ethereum. Waiting for QF allocation.");
       setAmount("");
       await refreshSaleState(ethAccount);
-      await refetchQfState();
     } catch (error) {
       console.error("QPAD purchase failed", error);
       toast.error(getFriendlyTxErrorMessage(error, "Contribution"));
     } finally {
       setIsBuying(false);
     }
-  }, [amountRaw, ensureEthereum, ethAccount, qfAccountId32, qfMappedRecipient, refreshSaleState, refetchQfState, sale.presaleAddress, writeEvmContractAsync]);
+  }, [amountRaw, ensureEthereum, ethAccount, qfAccountId32, qfMappedRecipient, refreshSaleState, sale.presaleAddress, writeEvmContractAsync]);
 
-  const claimQpad = useCallback(async () => {
-    const claimedAmount = claimableNow;
-    try {
-      await writeContractAsync({
-        address: sale.claimVaultAddress,
-        abi: qpadClaimVaultAbi,
-        functionName: "claim",
-      });
-      toast.success(`Claimed: ${formatAmount(claimedAmount, QPAD_DECIMALS)} ${sale.symbol}`);
-      await refetchQfState();
-    } catch (error) {
-      console.error("QPAD claim failed", error);
-      toast.error(getFriendlyTxErrorMessage(error, "Claim"));
-    }
-  }, [claimableNow, refetchQfState, sale.claimVaultAddress, sale.symbol, writeContractAsync]);
-
-  const ethCta = !isEvmConnected
-    ? "Contribute"
-    : ethChainId !== mainnet.id
-      ? "Switch to Ethereum"
-      : needsApproval
-        ? "Approve USDC"
-        : "Contribute";
-  const claimCta = !hasConnectedQfWallet
-    ? "Connect QF Wallet to Claim"
-    : isClaimPending
-      ? "Claiming..."
-      : claimsEnabled
-        ? `Claim ${sale.symbol}`
-        : "Claims Not Enabled";
+  const ethCta = isParticipationClosed
+    ? "Sale Closed"
+    : !isEvmConnected
+      ? "Contribute"
+      : ethChainId !== mainnet.id
+        ? "Switch to Ethereum"
+        : needsApproval
+          ? "Approve USDC"
+          : "Contribute";
 
   return (
     <div className="container mx-auto px-4 py-8 text-black md:py-12">
-      {isFiestaOpen && <QpadFiestaOverlay onClose={handleCloseFiesta} />}
-
       <section className="mb-8 flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
           <Avatar className="h-16 w-16 border-[3px] border-black bg-white sm:h-20 sm:w-20">
@@ -637,9 +479,6 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
           </div>
         </div>
       </section>
-
-      <QpadFiestaInlineBanner visible={hasDismissedFiesta} />
-      <QpadFiestaMarquee />
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
         <div className="contents lg:block lg:col-span-2 lg:space-y-8">
@@ -671,34 +510,13 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
               <CardTitle>Claim $QPAD on QF</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div
-                className={`border-[3px] border-black px-3 py-2 text-xs font-black uppercase tracking-[0.14em] ${
-                  claimsEnabled ? "bg-[#B6F569]" : "bg-[#FFF6BF]"
-                }`}
-              >
-                {claimsEnabled
-                  ? `Claims are open - claim your ${sale.symbol} below.`
-                  : "Claims are not yet enabled - check back once the sale closes."}
-              </div>
-              <div className="divide-y-2 divide-black/10">
-                <DetailRow label="Your Claimable" value={`${formatAmount(claimableNow, QPAD_DECIMALS)} ${sale.symbol}`} />
-                <DetailRow label="Already Claimed" value={`${formatAmount(claimedByRecipient, QPAD_DECIMALS)} ${sale.symbol}`} />
-                <DetailRow label={`${sale.symbol} Balance`} value={`${formatAmount(recipientQpadBalance, QPAD_DECIMALS)} ${sale.symbol}`} />
-              </div>
-              <Button
-                type="button"
-                className="w-full"
-                onClick={claimQpad}
-                disabled={!hasConnectedQfWallet || !claimsEnabled || claimableNow === 0n || isClaimPending}
-              >
-                {claimCta}
-              </Button>
-              {claimedByRecipient > 0n && (
-                <p className="text-sm font-bold text-black/70">
-                  Claimed: {formatAmount(claimedByRecipient, QPAD_DECIMALS)} {sale.symbol}
+              <div className="border-[3px] border-black bg-[#FFF6BF] px-4 py-4">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-black/55">Presale Update</p>
+                <p className="mt-2 text-lg font-black leading-tight">Refunds have been sent out.</p>
+                <p className="mt-2 text-sm font-bold text-black/70">
+                  QPAD presale participants should check their wallets. No further action is needed on this page.
                 </p>
-              )}
-              {claimError && <p className="text-sm font-bold text-[#B42318]">{getFriendlyTxErrorMessage(claimError, "Claim")}</p>}
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -737,9 +555,9 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
             <CardContent className="space-y-4">
               <div className="border-b-[3px] border-black pb-4">
                 <p className="text-xs font-black uppercase tracking-[0.14em] text-black/55">
-                  Sale Ends In
+                  Sale Status
                 </p>
-                <p className="mt-1 font-mono text-xl font-black">{saleCountdown}</p>
+                <p className="mt-1 text-xl font-black uppercase">Closed</p>
               </div>
               <div className="divide-y-2 divide-black/10">
                 <DetailRow label="Your USDC" value={formatAmount(saleState.usdcBalance, USDC_DECIMALS)} compact />
@@ -755,6 +573,7 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
                   onChange={(event) => setAmount(event.target.value)}
                   inputMode="decimal"
                   placeholder="50"
+                  disabled={isParticipationClosed}
                 />
               </div>
               <div className="space-y-3 border-[3px] border-black bg-[#FFF6BF] px-4 py-3">
@@ -779,6 +598,7 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
                       onChange={(event) => setManualQfAddress(event.target.value)}
                       placeholder="Paste QF SS58 address"
                       autoComplete="off"
+                      disabled={isParticipationClosed}
                     />
                     {qfMappedRecipient && (
                       <p className="text-xs font-black uppercase tracking-[0.1em] text-black/60">
@@ -800,15 +620,18 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
                 type="button"
                 className="w-full"
                 onClick={
-                  !isEvmConnected
+                  isParticipationClosed
                     ? undefined
-                    : ethChainId !== mainnet.id
-                      ? switchToEthereum
-                    : needsApproval
-                      ? approveUsdc
-                      : buyQpad
+                    : !isEvmConnected
+                      ? undefined
+                      : ethChainId !== mainnet.id
+                        ? switchToEthereum
+                        : needsApproval
+                          ? approveUsdc
+                          : buyQpad
                 }
                 disabled={
+                  isParticipationClosed ||
                   !isEvmConnected ||
                   (isEvmConnected && ethChainId === mainnet.id && !canSubmit) ||
                   isSwitchingChain ||
@@ -818,7 +641,12 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
               >
                 {isSwitchingChain ? "Switching..." : isApproving ? "Approving..." : isBuying ? "Contributing..." : ethCta}
               </Button>
-              {!hasQfRecipient && (
+              {isParticipationClosed && (
+                <p className="text-sm font-bold text-black/65">
+                  Contributions are closed. Refunds have already been sent to participants.
+                </p>
+              )}
+              {!isParticipationClosed && !hasQfRecipient && (
                 <p className="text-sm font-bold text-black/65">Connect a QF wallet or paste a QF address before contributing.</p>
               )}
               {trackedPurchase && <PurchaseStatusPanel tracker={trackedPurchase} />}
@@ -827,97 +655,6 @@ export function QpadExternalPresale({ sale }: { sale: QpadExternalSaleConfig }) 
         </div>
       </div>
     </div>
-  );
-}
-
-function QpadFiestaOverlay({ onClose }: { onClose: () => void }) {
-  return (
-    <div
-      aria-modal="true"
-      className="animate-fiesta-overlay-in fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm"
-      role="dialog"
-      onClick={onClose}
-    >
-      <div
-        className="relative w-full max-w-4xl"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <button
-          type="button"
-          aria-label="Close QPAD Fiesta"
-          className="absolute right-0 -top-10 z-10 text-white md:hidden"
-          onClick={onClose}
-        >
-          <X className="h-6 w-6" />
-        </button>
-        <button
-          type="button"
-          aria-label="Close QPAD Fiesta"
-          className="absolute right-3 top-3 z-10 hidden h-10 w-10 items-center justify-center border-[3px] border-black bg-white text-black shadow-[3px_3px_0_rgba(0,0,0,1)] transition-transform hover:-translate-y-0.5 md:flex"
-          onClick={onClose}
-        >
-          <X className="h-5 w-5" />
-        </button>
-
-        <div className="animate-fiesta-banner-in w-full overflow-hidden border-[3px] border-black bg-[#FFF8EC] shadow-[10px_10px_0_rgba(0,0,0,1)]">
-          <img
-            src={qpadFiestaBanner}
-            alt="QPAD Fiesta presale incentives"
-            className="block h-auto w-full object-cover"
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function QpadFiestaMarquee() {
-  const items = [
-    "QPAD Fiesta",
-    "Early buyers get more upside",
-    "$1,000 USDC community draw",
-    "20 whale rebate slots",
-    "6.25% USDC cashback",
-    "+5% bonus QPAD allocation",
-  ];
-
-  return (
-    <section className="neo-frame mb-6 overflow-hidden bg-[#111111] text-white">
-      <div className="overflow-hidden px-3 py-4 sm:px-4">
-        <div className="flex w-max items-center animate-launch-bar-slide">
-          {[0, 1].map((loop) => (
-            <div
-              key={`qpad-fiesta-message-${loop}`}
-              aria-hidden={loop === 1}
-              className="flex shrink-0 items-center gap-2 px-4 text-[10px] font-black uppercase tracking-[0.1em] whitespace-nowrap sm:gap-8 sm:px-10 sm:text-sm sm:tracking-[0.2em]"
-            >
-              {items.map((item, index) => (
-                <span key={`${loop}-${item}`} className="flex items-center gap-2 sm:gap-8">
-                  <span>{item}</span>
-                  <span className={index % 2 === 0 ? "text-[#B8EF53]" : "text-[#42C9FF]"}>•</span>
-                </span>
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function QpadFiestaInlineBanner({ visible }: { visible: boolean }) {
-  if (!visible) return null;
-
-  return (
-    <section className="animate-fiesta-inline-banner-in neo-frame mx-auto mb-8 w-full max-w-4xl overflow-hidden bg-white lg:hidden">
-      <div>
-        <img
-          src={qpadFiestaBanner}
-          alt="QPAD Fiesta presale incentives"
-          className="block h-auto w-full"
-        />
-      </div>
-    </section>
   );
 }
 

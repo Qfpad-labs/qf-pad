@@ -21,7 +21,6 @@ import AdminDashboard from "./pages/admin/page";
 import AdminPresales from "./pages/admin/presales/page";
 import AdminWhitelist from "./pages/admin/whitelist/page";
 import RootLayout from "./RootLayout";
-import { ChatbotBubble } from "./components/chat/chatbot-bubble";
 
 function App() {
   return (
@@ -52,7 +51,6 @@ function App() {
               <Route path="/admin/whitelist" element={<AdminWhitelist />} />
             </Route>
           </Routes>
-          <ChatbotBubble />
         </>
       </BrowserRouter>
     </RootLayout>
